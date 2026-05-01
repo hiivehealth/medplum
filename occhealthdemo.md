@@ -1,557 +1,514 @@
-# Occupational Health EHR/MIS Demo - Medplum Implementation Plan
+# Occupational Health EHR/MIS Demo - Agent-First Medplum Delivery Plan
 
 **Based on**: DHS Office of Health Security - Statement of Objectives (April 14, 2026)  
-**Purpose**: Build a configurable demo in Medplum showcasing core occupational health workflows for ~200,000 DHS civilian employees
+**Purpose**: Build a configurable Medplum demo for Occupational Health EHR/MIS using AI agents as the primary execution engine, with humans focused on direction, policy, validation, and acceptance.
 
 ---
 
 ## 1. Executive Summary
 
-This document outlines a phased approach to building a Medplum-based demo of the Occupational Health Electronic Health Record and Medical Information System (Occ Health EHR/MIS). The demo will focus on:
+This plan assumes the build will not be staffed or measured like a traditional people-day program. Instead, delivery is organized around:
 
-- **Unified occupational health records** for employees across their employment lifecycle
-- **Medical surveillance** with longitudinal trend analysis and exposure-informed decision support
-- **Case management** for injury/illness, return-to-work, and exposure follow-up
-- **Role-based access control** with privacy-centric data governance
-- **Standards-based interoperability** using FHIR R4 for integration with HR, labs, and analytics systems
+- Parallel AI agent execution across design, implementation, test, documentation, and integration work
+- Small, reviewable slices with explicit acceptance criteria
+- Strong automated validation at every step
+- Human oversight concentrated on policy, privacy, safety, and final product decisions
+
+The objective is to produce a credible DHS occupational health demo in Medplum that proves:
+
+- A unified occupational health record can be modeled cleanly in FHIR and Medplum
+- Occupational surveillance and case management can be driven through configuration-first workflows
+- Privacy, segmentation, and minimum-necessary disclosure rules can be enforced
+- AI agents can accelerate delivery without weakening validation, auditability, or security discipline
 
 ---
 
-## 2. Architecture Overview
+## 2. Agent-First Planning Assumptions
 
-### 2.1 Three-Layer Architecture
+### 2.1 What Changes in an Agent-Driven Build
 
-The solution comprises three integrated layers:
+The original plan assumed sequential delivery and human queue time. This revised plan replaces that with:
 
-#### **Layer 1: Clinical/Occupational Health EHR**
-- Encounter documentation (pre-placement, periodic, fitness-for-duty, exit exams)
-- Lab results, imaging, and vital signs
-- Clinical notes and scanned outside records
-- Immunization records
-- Drug and alcohol testing workflows
+- **Work package orchestration instead of staged handoff plans**
+- **Parallel execution instead of mostly serial handoffs**
+- **Exit criteria instead of schedule estimates**
+- **Automated validation gates instead of manual status checkpoints**
+- **Prompted task decomposition instead of large implementation batches**
 
-#### **Layer 2: Occupational/Exposure Data**
+### 2.2 What Humans Still Own
+
+AI agents should not be treated as autonomous policy owners. Human leads still own:
+
+- Clinical and occupational health policy interpretation
+- Privacy and legal decisions
+- Final approval of data sharing rules and minimum-necessary views
+- Security acceptance and deployment approval
+- Demo prioritization and scope cuts
+
+### 2.3 What Agents Should Own
+
+AI agents should do the bulk of:
+
+- Code generation and refactoring
+- FHIR profile and schema authoring
+- UI scaffolding and iterative refinement
+- Test generation
+- Data mapping and synthetic data generation
+- Documentation drafting
+- Integration adapters and transformation logic
+- Regression analysis across PRs
+
+---
+
+## 3. Delivery Model
+
+### 3.1 Recommended Agent Roles
+
+The demo should be executed by a coordinator plus specialized agent roles.
+
+| Role | Primary Responsibility | Outputs |
+|------|------------------------|---------|
+| Orchestrator Agent | Break work into slices, assign agents, enforce gates | Work queue, acceptance criteria, merge order |
+| FHIR Modeling Agent | Profiles, extensions, value sets, example resources | FHIR artifacts, example bundles |
+| UI Agent | React screens, forms, dashboards, workflow pages | UI components, routes, interaction flows |
+| Workflow Agent | Business rules, enrollment logic, recalls, RTW flows | Services, rules, task orchestration |
+| Integration Agent | HR, lab, analytics, import/export adapters | Connectors, transforms, API contracts |
+| Test Agent | Unit, integration, E2E, regression checks | Tests, fixtures, failure analysis |
+| Security Agent | RBAC, audit events, segmentation, risk review | Access rules, audit coverage, security checks |
+| Documentation Agent | Demo scripts, runbooks, technical docs | Docs, walkthroughs, setup guidance |
+
+### 3.2 Work Package Shape
+
+Every work item should be expressed as a small, agent-executable slice with:
+
+- Problem statement
+- Target files or implementation surface
+- Acceptance criteria
+- Validation commands
+- Risk notes
+- Required reviewers
+
+Each slice should ideally be mergeable independently.
+
+### 3.3 Merge Strategy
+
+- Keep one active branch per slice or tightly related slice cluster
+- Require automated validation before merge
+- Prefer short-lived branches and incremental PRs
+- Merge foundational model changes before dependent UI and workflow branches
+- Use feature flags or route-level isolation where partial features need to coexist
+
+---
+
+## 4. System Architecture for the Demo
+
+### 4.1 Three-Layer Domain Model
+
+#### Layer 1: Clinical / Occupational Health Record
+- Encounter documentation for pre-placement, periodic, fitness-for-duty, post-exposure, and exit exams
+- Lab results, imaging, vitals, and structured findings
+- Immunizations, fit testing, outside records, and exam-review-only ingestion
+
+#### Layer 2: Occupational / Exposure Intelligence
 - Job history and duty locations
-- Known/potential exposures (chemical, biological, physical, ergonomic)
 - Similar Exposure Groups (SEGs)
-- Surveillance program enrollment and participation
-- Incidents and near-misses
-- Controls and interventions
+- Exposure programs and surveillance participation
+- Incidents, near misses, hazard classifications, and controls
+- Longitudinal exposure-aware clinical context
 
-#### **Layer 3: Case Management & CRM**
-- Outreach and notifications
-- Reminders for due surveillance
-- Follow-up tracking for exposed/high-risk cohorts
-- Return-to-work workflow and restrictions
-- Clinical override documentation
-- Clearance/fitness determinations
+#### Layer 3: Case Management / Decision Support
+- Follow-up tasks and reminders
+- Clearance and work restriction workflows
+- Notifications and outreach
+- Clinical override tracking
+- Readiness dashboards and cohort views
 
----
+### 4.2 Architectural Constraint
 
-## 3. FHIR Data Model
+The demo must still reflect the DHS premise that this is a **commercial, configurable, standards-based solution**, not a custom greenfield system. Agent speed should not turn the demo into a highly bespoke architecture that would be unrealistic to operate.
 
-### 3.1 Core FHIR Resources
+That means:
 
-**Patient & Demographics**
-- `Patient` - DHS employee with occupational health extensions
-- `RelatedPerson` - Emergency contacts, beneficiaries
-- `Organization` - DHS components, clinics, external providers
-
-**Clinical Records**
-- `Encounter` - Clinical encounters (exam types, encounter type classifications)
-- `Observation` - Vital signs, exam findings, lab results, hearing/respiratory tests
-- `Condition` - Diagnoses, work-related conditions, occupational illnesses
-- `Procedure` - Medical procedures, fit testing, baseline exams
-- `Immunization` - Occupational vaccination records
-- `DiagnosticReport` - Lab results, imaging reports
-- `MedicationStatement` - Medications relevant to occupational health
-- `ServiceRequest` - Orders for surveillance exams, follow-ups
-
-**Occupational/Exposure Data**
-- `Basic` - Job role, location, Similar Exposure Group mapping
-- `CarePlan` - Surveillance programs and protocols
-- `CoverageEligibilityRequest` - Clearance/fitness status tracking
-- Custom extensions for:
-  - Exposure history and incident tracking
-  - Work restrictions and RTW status
-  - Clinical overrides with audit trail
-
-**Case Management**
-- `Task` - Follow-up actions, notifications, reminders
-- `Communication` - Outreach messages to employees/supervisors
-- `List` - Cohort/surveillance panel enrollments
-- `Bundle` - Transaction bundles for data migration
-
-**Access & Privacy**
-- `AuditEvent` - All access to employee records, disclosures to HR/supervisors
-- `Consent` - Data sharing preferences and restrictions
-
-### 3.2 Custom Extensions & Profiles
-
-Create Medplum-specific FHIR profiles for:
-- **Occupational Exam Encounter** - Distinguishes occupational from clinical encounters
-- **Exposure Summary** - Longitudinal exposure history per employee
-- **Surveillance Program** - Configurable panels (respiratory, hearing, etc.)
-- **Work Restriction** - Time-bounded work status and specific limitations
-- **Clinical Override** - Abnormal result acceptance with justification and audit trail
+- Prefer Medplum-native resource modeling and configuration over custom subsystems
+- Use standard FHIR resources and extensions before inventing new storage models
+- Keep custom code concentrated in workflow orchestration, UI composition, and integration adapters
 
 ---
 
-## 4. Core Workflows & Use Cases
+## 5. FHIR Data Model
 
-### 4.1 Pre-Placement Examination
-- **Actor**: Occupational health clinician, HR system
-- **Inputs**: Employee demographics, job role, component
-- **Process**:
-  1. Auto-enroll in relevant surveillance programs based on job/exposure
-  2. Create baseline exam encounter
-  3. Capture medical history, physical exam, labs (baseline)
-  4. Generate clearance determination
-  5. Store as longitudinal baseline for future comparisons
-- **Outputs**: Employee record created, clearance status, surveillance panel enrollments
+### 5.1 Core Resources
 
-### 4.2 Periodic/Annual Occupational Health Exam
-- **Actor**: Occupational health clinician, occupational health manager
-- **Process**:
-  1. Recall list generated for due exams (configurable intervals)
-  2. Clinician reviews exposure history and longitudinal trends
-  3. Document findings, compare to baseline and previous years
-  4. Apply clinical overrides if needed (with documentation)
-  5. Determine clearance/fitness status
-  6. Notify employee and HR of restrictions or follow-up needs
-- **Decision Support**: Longitudinal view showing trends (e.g., audiometry decline, spirometry changes)
+**People and Organization**
+- `Patient` for DHS employees
+- `RelatedPerson` for emergency or administrative contacts
+- `Organization` for DHS components, clinics, vendors, and labs
+- `Practitioner` and `PractitionerRole` for occupational health staff and reviewers
 
-### 4.3 Workplace Injury/Illness Documentation
-- **Actor**: Occupational health clinician, safety officer, supervisor
-- **Process**:
-  1. Document incident (date, location, description, exposure)
-  2. Link to job/exposure/SEG
-  3. Capture clinical findings and treatment
-  4. Determine workers' comp eligibility
-  5. Initiate return-to-work process
-- **Outputs**: OSHA 301 form data, FECA claim support, RTW workflow initiation
+**Clinical Record**
+- `Encounter` for occupational exam and injury-related visits
+- `Observation` for vitals, audiometry, spirometry, lab values, and surveillance findings
+- `DiagnosticReport` for lab and imaging summaries
+- `Condition` for occupational illness, injury, and relevant chronic findings
+- `Procedure` for exams, fit testing, immunization-related procedures, and interventions
+- `Immunization` for occupational vaccine history
+- `ServiceRequest` for ordered surveillance services and follow-up work
+- `DocumentReference` for scanned outside records and imported exam packets
 
-### 4.4 Return-to-Work (RTW) Management
-- **Actor**: Occupational health clinician, supervisor, HR
-- **Process**:
-  1. Create work restrictions (specific limitations, time-bounded)
-  2. Notify supervisor and HR with "minimum necessary" info
-  3. Schedule re-evaluation dates
-  4. Document accommodation attempts and outcomes
-  5. Clear restrictions when appropriate
-- **Tracking**: Audit log of all notifications and restriction changes
+**Occupational Health / Surveillance**
+- `CarePlan` for surveillance program enrollment and management
+- `Task` for recalls, follow-ups, review queues, and outreach work
+- `List` for surveillance cohorts and readiness cohorts
+- `Flag` for important employee-level alerts and review markers
 
-### 4.5 Medical Surveillance Program Enrollment
-- **Actor**: Occupational health admin, clinician
-- **Process**:
-  1. Define surveillance panels (e.g., respiratory protection, hearing conservation)
-  2. Map to job roles, tasks, exposures, SEGs, locations
-  3. Auto-enroll employees when job/exposure matches
-  4. Generate recall lists for due exams
-  5. Document participation and findings
-  6. Identify outliers and at-risk cohorts
-- **Tools**: Configurable panel builder, recall engine, trend analysis dashboard
+**Governance / Access / Audit**
+- `Consent` for data sharing rules where represented at the resource layer
+- `AuditEvent` for access logging and disclosure tracking
+- `Provenance` for imported records and agent-produced transformations where useful
 
-### 4.6 Exposure Incident Follow-Up
-- **Actor**: Occupational health clinician, case manager, supervisor
-- **Process**:
-  1. Identify employees exposed to incident (e.g., bloodborne pathogen, chemical spill)
-  2. Auto-enroll in post-exposure surveillance program
-  3. Generate tasks for baseline exam, follow-up testing, prophylaxis
-  4. Send notifications with testing schedule
-  5. Document all procedures and findings
-  6. Close case when cleared
-- **Tracking**: CRM-style follow-up with reminders and escalation
+### 5.2 Required Profiles and Extensions
 
-### 4.7 Longitudinal Fitness/Clearance Review
-- **Actor**: Occupational health manager, clinician
-- **Process**:
-  1. Pull employees with clearance expiration or requiring re-eval
-  2. Review full medical history, exposures, lab trends
-  3. Assess fitness for duty, apply clinical overrides if needed
-  4. Document rationale for all decisions
-  5. Generate reports for component leadership
-- **Decision Support**: Dashboards showing compliance, at-risk cohorts, required actions
+Create profiles or implementation guides for:
 
-### 4.8 Drug and Alcohol Testing (DAT) Program
-- **Actor**: Occupational health admin, testing provider, clinician
-- **Process**:
-  1. Identify employees subject to DAT (role-based)
-  2. Schedule/order tests
-  3. Ingest test results from provider
-  4. Link results to employee record
-  5. Generate compliance reports
-  6. Flag out-of-policy results for follow-up
-- **Integration**: Interface with external testing provider systems
+- Occupational encounter classification
+- Employee job history and duty location summary
+- Exposure history and incident linkage
+- Surveillance panel participation
+- Clearance status and work restrictions
+- Clinical override rationale and review trail
+- Minimum-necessary disclosure artifacts for supervisors and HR
+
+### 5.3 Demo Data Expectations
+
+The synthetic dataset should show meaningful occupational complexity, not just happy-path CRUD.
+
+Include:
+
+- Multiple DHS components
+- Direct-care and exam-review-only operating modes
+- At least 50 realistic employee records
+- Exposure-heavy personas and low-risk personas
+- Longitudinal observations across multiple years
+- Injury, RTW, surveillance due, and override scenarios
 
 ---
 
-## 5. Implementation Phases
+## 6. Core Demo Workflows
 
-### **Phase 1: Foundation & Data Model (Weeks 1-4)**
+### 6.1 Pre-Placement and Baseline Exam
+- Ingest employee identity and role context from HR feed
+- Apply job and exposure mapping rules
+- Auto-enroll surveillance requirements
+- Complete baseline encounter and labs
+- Record initial clearance decision
 
-**Goals:**
-- Set up Medplum instance and development environment
-- Define FHIR profiles and extensions for occupational health
-- Build sample data model
-- Create basic patient and encounter records
+### 6.2 Periodic Surveillance Review
+- Generate due and overdue queue
+- Compare annual findings against baseline and prior trends
+- Surface relevant exposures and prior incidents
+- Support clinical override capture when policy allows
+- Update readiness and clearance state
 
-**Deliverables:**
-1. Medplum instance deployed (local or staging)
-2. Custom FHIR profiles for:
-   - Occupational exam encounters
-   - Exposure history
-   - Work restrictions
-   - Surveillance program enrollments
-3. Sample data loader (10-20 test employees with diverse roles/exposures)
-4. Basic audit logging for access control
+### 6.3 Injury / Illness / Exposure Event
+- Document incident details and exposure category
+- Link event to role, location, SEG, and surveillance program
+- Generate OSHA-related artifacts and follow-up tasks
+- Start RTW or case-management sequence where applicable
 
-**Tasks:**
-- [ ] Set up Medplum project and database
-- [ ] Create occupational health-specific FHIR profiles/extensions
-- [ ] Design Patient extensions for occupational fields (job history, exposures, clearance status)
-- [ ] Create Encounter extensions (exam type, occupational flag, surveillance panel linkage)
-- [ ] Build data model documentation
-- [ ] Create sample data seeding script
+### 6.4 Return-to-Work Workflow
+- Capture fit / restricted / not fit outcome
+- Track time-bounded restrictions and re-evaluation dates
+- Present minimum-necessary views to HR and supervisors
+- Audit every disclosure and status change
 
----
+### 6.5 Exposure Program and Recall Engine
+- Define configurable surveillance panels
+- Map panels to jobs, tasks, exposures, and locations
+- Auto-enroll eligible employees
+- Create recall queues and reminder tasks
 
-### **Phase 2: Clinical Documentation & Encounters (Weeks 5-8)**
-
-**Goals:**
-- Build encounter workflows (pre-placement, periodic, fitness-for-duty)
-- Create clinician UI for entering exam data
-- Implement longitudinal view
-
-**Deliverables:**
-1. Pre-placement exam workflow
-2. Periodic exam workflow with baseline comparison
-3. Clinician UI—encounter creation and result entry
-4. Longitudinal patient summary view showing:
-   - Job history and exposures
-   - All encounter dates and types
-   - Key lab trends (e.g., hearing, spirometry)
-   - Current clearance status
-   - Current surveillance program enrollments
-
-**Tasks:**
-- [ ] Build React UI for encounter creation (encounter type selector, exam template rendering)
-- [ ] Create form components for vital signs, physical exam findings, lab results
-- [ ] Implement baseline capture and longitudinal comparison logic
-- [ ] Build longitudinal summary dashboard
-- [ ] Create encounter detail view with side-by-side baseline comparison
-- [ ] Add observation/result entry components
+### 6.6 Medical Readiness and Longitudinal Review
+- Aggregate trends across years and encounters
+- Show surveillance compliance and readiness state
+- Identify at-risk cohorts and outstanding actions
+- Support enterprise, component, and employee drill-down
 
 ---
 
-### **Phase 3: Exposure & Surveillance (Weeks 9-12)**
+## 7. Dependency-Ordered Backlog
 
-**Goals:**
-- Model occupational exposures and Similar Exposure Groups
-- Build surveillance program configuration and auto-enrollment
-- Create recall engine for due exams
+This build should be organized as dependency-managed backlog domains. Items below are listed in logical dependency order, but independent slices can run in parallel whenever their prerequisites are satisfied.
 
-**Deliverables:**
-1. Exposure data model and Patient extensions
-2. Configurable surveillance panel builder UI
-3. Auto-enrollment logic (job/exposure matching)
-4. Recall list generator
-5. Recall dashboard showing due/overdue employees
+### Delivery Controls and Repo Safety
 
-**Tasks:**
-- [ ] Design exposure model (exposures, SEGs, incidents, controls)
-- [ ] Create UI for surveillance admin to define panels
-- [ ] Implement auto-enrollment logic based on job/exposure
-- [ ] Build recall engine and scheduler
-- [ ] Create recall list view with filtering and recall-date sorting
-- [ ] Add ability to generate bulk recalls
+**Objective**: Establish an environment where agents can work repeatedly without destabilizing the repo.
 
----
+**Completion Criteria**
+- Medplum environment runs locally or in shared staging
+- Validation commands are documented and runnable
+- Synthetic data seeding path exists
+- PR template and acceptance format exist for agent-generated slices
 
-### **Phase 4: Case Management & RTW (Weeks 13-16)**
+**Typical Slice Types**
+- Environment setup scripts
+- Repo conventions and validation tasks
+- Demo seed data pipeline
+- Baseline CI checks
 
-**Goals:**
-- Build return-to-work workflow and work restrictions
-- Implement case management (tasks, notifications, follow-up tracking)
-- Create supervisor/HR notification system
+### Canonical Occupational Health Model
 
-**Deliverables:**
-1. Work restriction data model and creation UI
-2. Task/follow-up management system
-3. Notification template system
-4. Case management dashboard
-5. HR/supervisor minimal-necessary data views
+**Objective**: Lock down the FHIR and Medplum representation before dependent UI and workflow slices expand.
 
-**Tasks:**
-- [ ] Create Work Restriction resource extensions (specific limitations, end date, re-eval date)
-- [ ] Build RTW workflow UI (create restriction, schedule re-eval, clear)
-- [ ] Implement Task creation for follow-ups and reminders
-- [ ] Create notification service with templates (email/in-app)
-- [ ] Build case management board (Kanban-style) for open follow-ups
-- [ ] Create minimal-necessary view for supervisors and HR (work status, restrictions only)
-- [ ] Implement audit logging for all notifications sent
+**Completion Criteria**
+- Core profiles and extensions are implemented
+- Example employee records load successfully
+- Exposure, surveillance, clearance, and restriction concepts are represented consistently
+- Example longitudinal patient bundle is available for testing
 
----
+**Typical Slice Types**
+- FHIR profile authoring
+- Example bundles
+- Value set and terminology mapping
+- Data dictionary generation
 
-### **Phase 5: Medical Surveillance & Decision Support (Weeks 17-20)**
+### Core Clinical Vertical Slice
 
-**Goals:**
-- Build longitudinal trend analysis
-- Implement clinical override workflow
-- Create readiness dashboards and reports
+**Objective**: Prove that the occupational health record is functional end to end for clinician and reviewer workflows.
 
-**Deliverables:**
-1. Trend analysis component (lab trends, exam findings over time)
-2. Clinical override documentation UI
-3. Component/unit-level compliance dashboards
-4. Medical readiness reports
-5. Cohort identification tools
+**Completion Criteria**
+- Pre-placement workflow works end to end
+- Periodic exam workflow works end to end
+- Exam-review-only flow works with imported results
+- Employee summary shows longitudinal occupational context
 
-**Tasks:**
-- [ ] Implement trend analysis for key observations (hearing, spirometry, vitals)
-- [ ] Build Clinical Override capture form with justification and audit trail
-- [ ] Create dashboard showing:
-     - Surveillance compliance by unit/component
-     - Employees with outstanding requirements
-     - At-risk cohorts (e.g., abnormal trends)
-     - Clearance status distribution
-- [ ] Build report generator for:
-     - Individual medical readiness
-     - Component-level readiness
-     - Program compliance
-- [ ] Implement drill-down from aggregated dashboards to individual records
+**Typical Slice Types**
+- Exam forms and routes
+- Encounter orchestration
+- Longitudinal summary UI
+- Result ingestion and rendering
 
----
+### Surveillance and Readiness Engine
 
-### **Phase 6: Injury/Illness & OSHA Integration (Weeks 21-24)**
+**Objective**: Demonstrate that the system behaves like an occupational health platform rather than a generic EHR.
 
-**Goals:**
-- Document workplace injuries/illnesses with OSHA compliance
-- Link to exposures and surveillance programs
-- Generate OSHA forms
+**Completion Criteria**
+- Surveillance panel definition is configurable
+- Auto-enrollment rules run correctly
+- Recall queue is generated from real sample data
+- Clinical overrides are visible and auditable
+- Readiness dashboard surfaces compliance and risk signals
 
-**Deliverables:**
-1. Workplace incident/injury encounter type
-2. OSHA 300/301 form generation
-3. Workers' compensation (FECA) support
-4. Incident-to-surveillance linking
+**Typical Slice Types**
+- Eligibility engine
+- Recall services
+- Trend comparison views
+- Readiness dashboards
 
-**Tasks:**
-- [ ] Create Injury/Illness Encounter with structured incident capture
-- [ ] Implement mapping to OSHA 300/300A log data
-- [ ] Build OSHA 301 form generator
-- [ ] Create FECA claim support forms
-- [ ] Implement automatic post-incident surveillance enrollment
-- [ ] Build incident/exposure link tracking
+### Injury, Exposure, and RTW Operations
 
----
+**Objective**: Show operational case-management workflows beyond encounter documentation.
 
-### **Phase 7: Security, Access Control & Privacy (Weeks 25-28)**
+**Completion Criteria**
+- Injury/exposure event capture works
+- RTW restrictions and re-evaluations work
+- Task-driven follow-up works
+- OSHA support artifacts are generated from captured data
 
-**Goals:**
-- Implement role-based access control (RBAC)
-- Segregate occupational from clinical data
-- Build audit logging and reporting
-- Enforce privacy workflows
+**Typical Slice Types**
+- Incident forms
+- Case management board
+- Restriction logic
+- OSHA and FECA-oriented export views
 
-**Deliverables:**
-1. RBAC implementation (occupational health roles, HR roles, supervisor roles, admin)
-2. Encounter-type-specific access rules
-3. Minimal-necessary data views for non-clinical roles
-4. Audit log and access reporting
-5. Consent and data-sharing configuration
+### Privacy, Audit, and Interoperability Controls
 
-**Tasks:**
-- [ ] Define Medplum roles: Occ Health Clinician, Occ Health Manager, Component Admin, HR User, Supervisor, Employee
-- [ ] Implement encounter-level access rules (full access for occupational role, restricted for others)
-- [ ] Build encounter tagging/classification to enforce separation
-- [ ] Create Consent resources for data sharing preferences
-- [ ] Implement minimal-necessary views:
-     - Supervisors see: work status, restrictions, start/end dates
-     - HR sees: clearance status, restrictions, required actions
-     - Employees see: their own records
-- [ ] Build AuditEvent logging for all data access and disclosures
-- [ ] Create audit dashboard and report generation
+**Objective**: Prove the demo is credible for DHS privacy, governance, and integration expectations.
+
+**Completion Criteria**
+- Role-based segmentation is enforced
+- Supervisor and HR views are minimum-necessary only
+- Audit logging is visible and queryable
+- At least one HR ingest path and one lab/import path are demonstrated
+
+**Typical Slice Types**
+- Access policies
+- Disclosure views
+- Audit dashboards
+- Integration adapters and import mappings
+
+### Demo Hardening and Narrative Quality
+
+**Objective**: Turn the implementation into a repeatable, high-confidence demonstration.
+
+**Completion Criteria**
+- Demo script is documented
+- Sample personas cover major DHS scenarios
+- Seed data can fully recreate the demo
+- Core paths have automated regression coverage
+- User-facing and technical docs are ready
+
+**Typical Slice Types**
+- Demo walkthroughs
+- Persona scripting
+- Regression packs
+- Runbooks and architecture docs
 
 ---
 
-### **Phase 8: Interoperability & Integration (Weeks 29-32)**
+## 8. Cross-Cutting Workstreams
 
-**Goals:**
-- Build FHIR APIs for data exchange
-- Create integration patterns for HR systems, labs, analytics
-- Support data import from legacy systems
+The following workstreams should run continuously once the canonical model backbone is stable enough to support dependent slices.
 
-**Deliverables:**
-1. FHIR REST APIs for encounter, observation, surveillance data
-2. Sample integrations (HR feed, lab result ingestion)
-3. Data migration/import tools
-4. HL7 v2 adapter (for lab systems)
+### Workstream A: FHIR and Data Modeling
+- Profiles and extensions
+- Synthetic sample bundles
+- Terminology/value set normalization
 
-**Tasks:**
-- [ ] Expose FHIR APIs for Patient, Encounter, Observation, Task, CarePlan (READ, CREATE, UPDATE)
-- [ ] Build sample HR integration adapter (consume employee roster, update job/exposure)
-- [ ] Create lab result ingestion workflow (HL7 v2 inbound processing)
-- [ ] Build data migration tools (CSV import, legacy data mapping)
-- [ ] Create API documentation and integration samples
-- [ ] Implement authorization checks on all APIs
+### Workstream B: UI and Interaction Design
+- Clinician forms
+- Employee summary views
+- Dashboards and case boards
 
----
+### Workstream C: Workflow Automation
+- Enrollment rules
+- Recall generation
+- Notifications and task orchestration
 
-### **Phase 9: Dashboards, Analytics & Reporting (Weeks 33-36)**
+### Workstream D: Privacy and Security
+- Role segmentation
+- Minimum-necessary views
+- Audit completeness
 
-**Goals:**
-- Build executive/management dashboards
-- Create configurable reporting tools
-- Implement population-level analytics
+### Workstream E: Integration and Migration
+- HR ingest
+- External exam import
+- Lab import and analytics export
 
-**Deliverables:**
-1. Medical readiness dashboard (enterprise-wide compliance, at-risk cohorts)
-2. Component-level readiness reports
-3. Surveillance program performance dashboards
-4. Custom report builder UI
-5. De-identified cohort analytics
-
-**Tasks:**
-- [ ] Create enterprise readiness dashboard:
-     - Surveillance compliance by program/component
-     - Clearance status distribution
-     - Outstanding requirements by category
-     - At-risk employee identification
-- [ ] Build drill-down capability (click on component → employees → individual record)
-- [ ] Create configurable report templates (medical readiness, program compliance, incident summaries)
-- [ ] Build report scheduler and export (PDF, CSV)
-- [ ] Implement de-identified data export for analytics platforms
-- [ ] Create sample dashboards for different user roles
+### Workstream F: Validation and Demo Reliability
+- Test generation
+- Regression fixtures
+- Demo reset and re-seed capabilities
 
 ---
 
-### **Phase 10: Testing, Documentation & Hardening (Weeks 37-40)**
+## 9. Agent Operating Rules
 
-**Goals:**
-- Comprehensive testing and bug fixes
-- Create user and technical documentation
-- Performance and security hardening
-- Prepare for production-readiness assessment
+### 9.1 Slice Size
 
-**Deliverables:**
-1. Unit tests, integration tests, E2E tests
-2. User documentation (clinician, admin, supervisor guides)
-3. Technical documentation (API docs, deployment guide)
-4. Security assessment and remediation
-5. Performance tuning
+Agents should not be given broad prompts like "build surveillance." They should receive narrow instructions such as:
 
-**Tasks:**
-- [ ] Write unit tests for core business logic (auto-enrollment, recall generation, trend analysis)
-- [ ] Create integration tests for workflows (encounter → surveillance → recall)
-- [ ] Build E2E tests for key paths (pre-placement exam → recall → follow-up)
-- [ ] Create user guides for each role
-- [ ] Write API documentation and integration samples
-- [ ] Conduct security review and fix issues
-- [ ] Run performance tests under load
-- [ ] Create deployment guide and runbook
+- Add the `Encounter` occupational classification extension and tests
+- Build the recall queue page using existing seeded employees
+- Implement minimum-necessary supervisor summary for work restrictions only
+
+### 9.2 Validation Requirements
+
+Every agent-generated PR should include:
+
+- A short problem statement
+- Acceptance criteria
+- Files changed
+- Validation run and result
+- Known follow-ups or risks
+
+### 9.3 Human Review Requirements
+
+Require human review for:
+
+- Privacy rule changes
+- Security-sensitive access changes
+- Clinical override logic
+- OSHA / FECA output assumptions
+- Any change that reframes DHS policy intent
+
+### 9.4 Prompt and Artifact Hygiene
+
+Maintain reusable prompt packs for:
+
+- FHIR modeling tasks
+- React workflow tasks
+- Security review tasks
+- Test generation tasks
+- Documentation generation tasks
+
+Prompt packs should include local validation commands and repo-specific conventions so each agent does less rediscovery.
 
 ---
 
-## 6. Key Features by Phase Summary
+## 10. Technology Stack
 
-| Phase | Key Features |
-|-------|--------------|
-| 1 | FHIR profiles, data model, sample data |
-| 2 | Encounter workflows, clinician UI, longitudinal views |
-| 3 | Exposures, surveillance programs, recall engine |
-| 4 | Case management, RTW, notifications |
-| 5 | Trends, clinical overrides, readiness dashboards |
-| 6 | Injury/illness, OSHA forms |
-| 7 | RBAC, access control, audit logging |
-| 8 | FHIR APIs, integrations, data migration |
-| 9 | Executive dashboards, reporting, analytics |
-| 10 | Testing, documentation, hardening |
-
----
-
-## 7. Technology Stack
-
-**Frontend:**
+**Core Platform**
+- Medplum server and Medplum app extension points
+- PostgreSQL
 - React + TypeScript
-- Medplum React components
-- Recharts for trend visualization
-- React Query for data fetching
 
-**Backend:**
-- Medplum server (open-source)
-- PostgreSQL database
-- Node.js for custom logic
-- Bull queues for background tasks (recall generation, notifications)
+**Integration and Automation**
+- FHIR R4 APIs
+- HL7 v2 ingestion where needed
+- Background jobs for recalls and notifications
+- Synthetic data loaders and bundle import utilities
 
-**Integration:**
-- FHIR R4 REST APIs
-- HL7 v2 message processing
-- OAuth 2.0 for access control
-- JWT for API authentication
+**Agent Enablement**
+- Strong repo scripts for lint, test, typecheck, seed, and reset
+- Repeatable local/staging environments
+- CI that mirrors what agents run locally
 
-**Deployment:**
-- Docker containerization
-- Docker Compose for local development
-- Kubernetes-ready manifests for production
-- CI/CD pipeline (GitHub Actions)
+**Visualization and Demo UX**
+- Trend visualization for surveillance data
+- Dashboarding for readiness and cohort analytics
+- Route-level views for clinician, supervisor, HR, and admin personas
 
 ---
 
-## 8. Configuration & Customization Points
+## 11. Demo Persona Set
 
-The demo should showcase Medplum's ability to support configuration without code changes:
+Use a persona set that exercises different workflows and access models.
 
-1. **Surveillance Panel Configuration** - Admin UI to define panels and eligibility rules
-2. **Encounter Templates** - Configure exam types and required fields
-3. **Workflow States** - Define RTW status options and transitions
-4. **Roles and Permissions** - Configure RBAC without code changes
-5. **Report Templates** - Create custom reports via UI
-6. **Dashboard Customization** - Configure metrics and drill-down options
-7. **Notification Templates** - Customize message text and recipients
-8. **Data Mapping** - Define HR system field mappings
+1. **Law Enforcement Officer**: annual fitness review, hearing conservation, prior incident exposure
+2. **Administrative Employee**: standard pre-placement and periodic monitoring, minimal exposure profile
+3. **HAZMAT / High-Exposure Employee**: respiratory surveillance, chemical exposure history, multiple follow-ups
+4. **Training Center Instructor**: fit-for-duty requirements, repeated evaluations, RTW scenario
+5. **Supervisor Persona**: minimum-necessary visibility into restrictions and readiness impact
+6. **HR Persona**: clearance and restriction management without clinical details
 
 ---
 
-## 9. Sample Data Scenarios
+## 12. Success Criteria
 
-Create realistic personas and scenarios:
+The revised plan should be judged by delivery quality and demo credibility, not schedule assumptions.
 
-1. **Alice (Law Enforcement)** - Recurring annual exams, hearing conservation surveillance, past incident exposure
-2. **Bob (IT Staff)** - Pre-placement baseline, periodic exams, no special exposures
-3. **Carol (HAZMAT Handler)** - Respiratory protection program, chemical exposure panels, documented incident history
-4. **David (FLETC Instructor)** - Multiple component exams, fit-for-duty requirements, RTW case study
+### Product Success
+- Core occupational health workflows work end to end
+- Longitudinal surveillance and trend views are credible
+- Privacy and segmentation behavior is demonstrable
+- Integration and import stories are believable and standards-based
+- Demo data supports realistic scenarios instead of toy examples
 
-Each scenario demonstrates key workflows and decision points.
+### Delivery Success
+- Agents can implement slices in parallel without destabilizing the codebase
+- CI reliably catches regressions from agent-generated changes
+- Each merged slice is independently reviewable and reversible
+- Documentation stays current with the implementation
+- Demo environments can be recreated from seed scripts and configuration
 
----
-
-## 10. Success Criteria
-
-- ✅ Core workflows operational end-to-end
-- ✅ 50+ sample employees with realistic data
-- ✅ Clinician can complete pre-placement, periodic, and RTW exams
-- ✅ Surveillance recall engine functions correctly
-- ✅ Longitudinal trend analysis works for key indicators
-- ✅ Role-based access control enforced
-- ✅ Audit logs capture all access
-- ✅ FHIR APIs functional and documented
-- ✅ Medical readiness dashboard shows correct compliance metrics
-- ✅ System handles 10x growth without redesign (scalability demonstrated)
+### Executive Demo Success
+- The system clearly differentiates itself from a general EHR
+- The demo shows surveillance, readiness, RTW, and exposure-aware longitudinal review
+- The demo communicates configuration-first extensibility rather than one-off custom code
 
 ---
 
-## 11. Next Steps
+## 13. Immediate Next Actions
 
-1. **Set up Medplum development environment** (Phase 1)
-2. **Align with DHS on priority workflows** (pre-placement, surveillance, RTW)
-3. **Create detailed technical design** for FHIR profiles and extensions
-4. **Build iteratively** with user feedback from occupational health domain experts
-5. **Plan production migration** from legacy systems (data mapping, validation)
+1. Define the canonical occupational health FHIR profile set and example bundle package
+2. Create the agent work queue as small mergeable slices instead of large epics
+3. Stand up seed data that supports all primary DHS demo personas
+4. Build the first end-to-end vertical slice: pre-placement -> surveillance enrollment -> clearance
+5. Add automated validation gates so agent-generated PRs cannot merge without passing checks
 
 ---
 
-## 12. References
+## 14. References
 
 - DHS OHS Statement of Objectives (April 14, 2026)
 - FHIR R4 Specification (HL7)
