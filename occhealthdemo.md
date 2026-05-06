@@ -508,7 +508,37 @@ The revised plan should be judged by delivery quality and demo credibility, not 
 
 ---
 
-## 14. References
+## 14. Active Implementation Checklist
+
+### FHIR Model Foundation
+- [x] Create a reusable occupational health foundation transaction bundle
+- [x] Add canonical occupational health profile, extension, identifier, and code system URL constants
+- [x] Add example employee, encounter, surveillance, task, and work-status resources
+- [x] Add a Medplum client loader example for the foundation bundle
+- [x] Add initial occupational health `StructureDefinition` examples for employee and encounter modeling
+- [x] Add missing extension `StructureDefinition` examples referenced by the core profiles
+- [x] Add occupational health `CodeSystem` and `ValueSet` examples for core terminology
+
+### FHIR Workflow Examples
+- [x] Add CRUD and search workflow examples for occupational health enrollment and recall flows
+- [x] Add a surveillance recall bot example using existing Medplum task patterns
+- [x] Add example resources for minimum-necessary HR/supervisor views
+- [x] Add an example for imported outside exam-review-only workflows
+
+### Demo Data and Validation
+- [x] Expand the synthetic dataset beyond the initial employee scenario set
+- [x] Add example personas for direct-care, review-only, RTW, and injury workflows
+- [ ] Run package build validation once a Node toolchain is available in the environment
+- [x] Add test coverage or validation examples for the occupational health artifacts
+
+### Next Product Slices
+- [x] Add supervisor and HR minimum-necessary occupational health examples
+- [x] Add surveillance dashboard or readiness-oriented example queries
+- [x] Add injury / exposure / RTW operational examples
+
+---
+
+## 15. References
 
 - DHS OHS Statement of Objectives (April 14, 2026)
 - FHIR R4 Specification (HL7)
