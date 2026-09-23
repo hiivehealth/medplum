@@ -22,6 +22,7 @@ import { PasswordInput } from '../PasswordInput/PasswordInput';
 import { getErrorsForInput, getIssuesForExpression } from '../utils/outcomes';
 
 export interface AuthenticationFormProps extends BaseLoginRequest {
+  readonly systemUseNoticeVersion?: string;
   readonly disableEmailAuth?: boolean;
   readonly disableGoogleAuth?: boolean;
   readonly onForgotPassword?: () => void;
@@ -34,7 +35,9 @@ export function AuthenticationForm(props: AuthenticationFormProps): JSX.Element 
   const [email, setEmail] = useState<string>();
 
   if (!email) {
-    return <EmailForm setEmail={setEmail} {...props} />;
+    const { systemUseNoticeVersion, ...emailProps } = props;
+    void systemUseNoticeVersion;
+    return <EmailForm setEmail={setEmail} {...emailProps} />;
   } else {
     return <PasswordForm email={email} resetEmail={() => setEmail(undefined)} {...props} />;
   }
@@ -152,6 +155,7 @@ export function EmailForm(props: EmailFormProps): JSX.Element {
 
 export interface PasswordFormProps extends BaseLoginRequest {
   readonly email: string;
+  readonly systemUseNoticeVersion?: string;
   readonly onForgotPassword?: () => void;
   readonly handleAuthResponse: (response: LoginAuthenticationResponse) => void;
   readonly resetEmail: () => void;

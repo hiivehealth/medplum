@@ -40,6 +40,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import { authenticator } from 'otplib';
 import { getUserConfiguration } from '../auth/me';
+import { consumeSystemUseNoticeVersion, rememberSystemUseNoticeVersion } from '../auth/system-use-notice';
 import { getConfig } from '../config/loader';
 import { getAccessPolicyForLogin, getRepoForLogin } from '../fhir/accesspolicy';
 import type { Repository, SystemRepository } from '../fhir/repo';
@@ -88,6 +89,8 @@ export interface LoginRequest {
   readonly forceUseFirstMembership?: boolean;
   /** @deprecated Use "offline_access" scope instead. */
   readonly remember?: boolean;
+  /** Validated system use notice version for this password login only. */
+  readonly systemUseNoticeVersion?: string;
 }
 
 export interface TokenResult {
@@ -200,6 +203,10 @@ export async function tryLogin(request: LoginRequest): Promise<WithId<Login>> {
     userAgent: request.userAgent,
     pictureUrl: request.pictureUrl,
   });
+
+  if (request.systemUseNoticeVersion) {
+    await rememberSystemUseNoticeVersion(login.id, request.systemUseNoticeVersion);
+  }
 
   // Try to get user memberships
   // If they only have one membership, set it now
@@ -499,7 +506,8 @@ export async function setLoginMembership(
     project.id,
     membership.profile,
     login.remoteAddress,
-    AuditEventOutcome.Success
+    AuditEventOutcome.Success,
+    { systemUseNoticeVersion: await consumeSystemUseNoticeVersion(login.id) }
   );
   logAuditEvent(auditEvent);
 

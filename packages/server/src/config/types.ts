@@ -218,6 +218,13 @@ export interface MedplumServerConfig {
   rangeSearch?: boolean;
 
   /**
+   * Server fallback for projects without an explicit system-use-notice policy.
+   * Enabled-by-default deployments fail closed until defaultNoticeReference
+   * identifies a valid, final Hiive System Use Notice DocumentReference.
+   */
+  systemUseNotice?: SystemUseNoticeServerConfig;
+
+  /**
    * Optional URL for AI real-time transcription service.
    * Default is `wss://api.openai.com/v1/realtime?intent=transcription`.
    */
@@ -253,6 +260,12 @@ export interface MedplumServerConfig {
    * Optional customizations to the server generated CapabilityStatement.
    */
   capabilityStatement?: MedplumCapabilityStatementConfig;
+}
+
+export interface SystemUseNoticeServerConfig {
+  enabledByDefault: boolean;
+  defaultNoticeProjectId?: string;
+  defaultNoticeReference?: string;
 }
 
 export interface MedplumCapabilityStatementConfig {

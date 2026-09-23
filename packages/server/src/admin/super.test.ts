@@ -296,6 +296,63 @@ describe('Super Admin routes', () => {
     expect(mockRebuildR4ValueSets).not.toHaveBeenCalled();
   });
 
+  test('Publishes immutable versioned system use notices and activates one for a project', async () => {
+    const version = `usg-system-use-${randomUUID()}`;
+    const createRes = await request(app)
+      .post(`/admin/super/system-use-notices/projects/${project.id}/notices`)
+      .set('Authorization', 'Bearer ' + adminAccessToken)
+      .type('json')
+      .send({ version, title: 'Government System Use Notice', body: 'Approved notice body' });
+    expect(createRes).toHaveStatus(201);
+    expect(createRes.body.docStatus).toBe('preliminary');
+
+    const duplicate = await request(app)
+      .post(`/admin/super/system-use-notices/projects/${project.id}/notices`)
+      .set('Authorization', 'Bearer ' + adminAccessToken)
+      .type('json')
+      .send({ version, title: 'Duplicate', body: 'Duplicate body' });
+    expect(duplicate).toHaveStatus(400);
+
+    const publishRes = await request(app)
+      .post(`/admin/super/system-use-notices/projects/${project.id}/notices/${createRes.body.id}/publish`)
+      .set('Authorization', 'Bearer ' + adminAccessToken)
+      .type('json')
+      .send({});
+    expect(publishRes).toHaveStatus(200);
+    expect(publishRes.body.docStatus).toBe('final');
+
+    const mutateRes = await request(app)
+      .put(`/fhir/R4/DocumentReference/${createRes.body.id}`)
+      .set('Authorization', 'Bearer ' + adminAccessToken)
+      .type('json')
+      .send({ ...publishRes.body, description: 'Changed without a new version' });
+    expect(mutateRes).toHaveStatus(403);
+
+    const deleteRes = await request(app)
+      .delete(`/fhir/R4/DocumentReference/${createRes.body.id}`)
+      .set('Authorization', 'Bearer ' + adminAccessToken);
+    expect(deleteRes).toHaveStatus(403);
+
+    const activateRes = await request(app)
+      .post(`/admin/super/system-use-notices/projects/${project.id}/policy`)
+      .set('Authorization', 'Bearer ' + adminAccessToken)
+      .type('json')
+      .send({ enabled: true, activeNotice: `DocumentReference/${createRes.body.id}` });
+    expect(activateRes).toHaveStatus(200);
+    expect(JSON.stringify(activateRes.body.extension)).toContain(`DocumentReference/${createRes.body.id}`);
+
+    const denied = await request(app)
+      .post(`/admin/super/system-use-notices/projects/${project.id}/notices`)
+      .set('Authorization', 'Bearer ' + nonAdminAccessToken)
+      .type('json')
+      .send({
+        version: `usg-system-use-${randomUUID()}`,
+        title: 'Unauthorized',
+        body: 'Unauthorized',
+      });
+    expect(denied).toHaveStatus(403);
+  });
+
   test('Rebuild StructureDefinitions require respond-async', async () => {
     const res = await request(app)
       .post('/admin/super/structuredefinitions')
