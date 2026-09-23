@@ -204,10 +204,6 @@ export async function tryLogin(request: LoginRequest): Promise<WithId<Login>> {
     pictureUrl: request.pictureUrl,
   });
 
-  if (request.systemUseNoticeVersion) {
-    await rememberSystemUseNoticeVersion(login.id, request.systemUseNoticeVersion);
-  }
-
   // Try to get user memberships
   // If they only have one membership, set it now
   // Otherwise the application will need to prompt the user
@@ -221,11 +217,13 @@ export async function tryLogin(request: LoginRequest): Promise<WithId<Login>> {
     throw new OperationOutcomeError(badRequest('User not found'));
   }
 
-  if (memberships.length === 1 || request.forceUseFirstMembership) {
-    return setLoginMembership(login, memberships[0]);
-  } else {
-    return login;
+  if ((memberships.length === 1 || request.forceUseFirstMembership) && memberships[0]) {
+    return setLoginMembership(login, memberships[0], request.systemUseNoticeVersion);
   }
+  if (request.systemUseNoticeVersion) {
+    await rememberSystemUseNoticeVersion(login.id, request.systemUseNoticeVersion);
+  }
+  return login;
 }
 
 export function validateLoginRequest(request: LoginRequest): void {
@@ -441,7 +439,8 @@ export function getClientApplicationMembership(
  */
 export async function setLoginMembership(
   login: WithId<Login>,
-  membership: WithId<ProjectMembership>
+  membership: WithId<ProjectMembership>,
+  systemUseNoticeVersion?: string
 ): Promise<WithId<Login>> {
   if (login.revoked) {
     throw new OperationOutcomeError(badRequest('Login revoked'));
@@ -507,7 +506,7 @@ export async function setLoginMembership(
     membership.profile,
     login.remoteAddress,
     AuditEventOutcome.Success,
-    { systemUseNoticeVersion: await consumeSystemUseNoticeVersion(login.id) }
+    { systemUseNoticeVersion: systemUseNoticeVersion ?? (await consumeSystemUseNoticeVersion(login.id)) }
   );
   logAuditEvent(auditEvent);
   if (getConfig().saveAuditEvents) {

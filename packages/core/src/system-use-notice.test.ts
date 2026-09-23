@@ -1,7 +1,11 @@
 // SPDX-FileCopyrightText: Copyright Orangebot, Inc. and Medplum contributors
 // SPDX-License-Identifier: Apache-2.0
-import type { Project } from '@medplum/fhirtypes';
-import { createSystemUseNoticeProjectPolicyExtension, getSystemUseNoticeProjectPolicy } from './system-use-notice';
+import type { Project, Resource } from '@medplum/fhirtypes';
+import {
+  createSystemUseNoticeProjectPolicyExtension,
+  getSystemUseNoticeProjectPolicy,
+  isSystemUseNotice,
+} from './system-use-notice';
 
 describe('System use notice', () => {
   test('Creates and reads the controlled Project extension', () => {
@@ -21,5 +25,16 @@ describe('System use notice', () => {
       extension: [createSystemUseNoticeProjectPolicyExtension({ enabled: false })],
     };
     expect(getSystemUseNoticeProjectPolicy(project)).toStrictEqual({ enabled: false, activeNotice: undefined });
+  });
+
+  test('Identifies profiled notice DocumentReferences', () => {
+    expect(
+      isSystemUseNotice({
+        resourceType: 'DocumentReference',
+        meta: { profile: ['https://ehr.hiivehealth.net/fhir/StructureDefinition/hiive-system-use-notice'] },
+      } as Resource)
+    ).toBe(true);
+    expect(isSystemUseNotice({ resourceType: 'DocumentReference' } as Resource)).toBe(false);
+    expect(isSystemUseNotice({ resourceType: 'Patient' } as Resource)).toBe(false);
   });
 });

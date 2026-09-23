@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: Copyright Orangebot, Inc. and Medplum contributors
 // SPDX-License-Identifier: Apache-2.0
-import type { Extension, Project, Reference } from '@medplum/fhirtypes';
+import type { DocumentReference, Extension, Project, Reference, Resource } from '@medplum/fhirtypes';
 
 export const SYSTEM_USE_NOTICE_PROFILE_URL =
   'https://ehr.hiivehealth.net/fhir/StructureDefinition/hiive-system-use-notice';
@@ -15,7 +15,6 @@ export const SYSTEM_USE_NOTICE_VERSION_IDENTIFIER_SYSTEM =
 export const SYSTEM_USE_NOTICE_DOCUMENT_TYPE_SYSTEM = 'https://ehr.hiivehealth.net/fhir/CodeSystem/document-type';
 export const SYSTEM_USE_NOTICE_DOCUMENT_TYPE_CODE = 'system-use-notice';
 export const SYSTEM_USE_NOTICE_ACTION_LABEL = 'OK';
-export const MAX_SYSTEM_USE_NOTICE_VERSION_LENGTH = 128;
 
 export interface SystemUseNoticeRequest {
   readonly clientId?: string;
@@ -65,4 +64,12 @@ export function createSystemUseNoticeProjectPolicyExtension(policy: SystemUseNot
     extension.push({ url: SYSTEM_USE_NOTICE_ACTIVE_NOTICE_URL, valueReference: policy.activeNotice });
   }
   return { url: SYSTEM_USE_NOTICE_POLICY_URL, extension };
+}
+
+/** True when the resource is a profiled Hiive system use notice DocumentReference. */
+export function isSystemUseNotice(resource: Resource | undefined): resource is DocumentReference {
+  return (
+    resource?.resourceType === 'DocumentReference' &&
+    resource.meta?.profile?.includes(SYSTEM_USE_NOTICE_PROFILE_URL) === true
+  );
 }

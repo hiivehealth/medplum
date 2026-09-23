@@ -4,8 +4,9 @@ import {
   badRequest,
   createSystemUseNoticeProjectPolicyExtension,
   encodeBase64,
-  MAX_SYSTEM_USE_NOTICE_VERSION_LENGTH,
+  isSystemUseNotice,
   OperationOutcomeError,
+  Operator,
   SYSTEM_USE_NOTICE_DOCUMENT_TYPE_CODE,
   SYSTEM_USE_NOTICE_DOCUMENT_TYPE_SYSTEM,
   SYSTEM_USE_NOTICE_POLICY_URL,
@@ -23,20 +24,12 @@ import type { Repository } from '../fhir/repo';
 import { getGlobalSystemRepo, getProjectSystemRepo } from '../fhir/repo';
 import { makeValidationMiddleware } from '../util/validator';
 
-const MAX_TITLE_LENGTH = 256;
-const MAX_BODY_LENGTH = 64 * 1024;
-const VERSION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
-
 export const systemUseNoticeAdminRouter = Router();
 
 const createValidator = makeValidationMiddleware([
-  body('version')
-    .isString()
-    .isLength({ min: 1, max: MAX_SYSTEM_USE_NOTICE_VERSION_LENGTH })
-    .matches(VERSION_PATTERN)
-    .withMessage('Invalid version'),
-  body('title').isString().trim().isLength({ min: 1, max: MAX_TITLE_LENGTH }).withMessage('Invalid title'),
-  body('body').isString().isLength({ min: 1, max: MAX_BODY_LENGTH }).withMessage('Invalid body'),
+  body('version').isString().trim().notEmpty().withMessage('Invalid version'),
+  body('title').isString().trim().notEmpty().withMessage('Invalid title'),
+  body('body').isString().notEmpty().withMessage('Invalid body'),
   body('replaces')
     .optional()
     .isString()
@@ -49,6 +42,13 @@ systemUseNoticeAdminRouter.get('/projects/:projectId/notices', async (req: Reque
   const resources = await systemRepo.searchResources<DocumentReference>({
     resourceType: 'DocumentReference',
     count: 1000,
+    filters: [
+      {
+        code: 'type',
+        operator: Operator.EQUALS,
+        value: `${SYSTEM_USE_NOTICE_DOCUMENT_TYPE_SYSTEM}|${SYSTEM_USE_NOTICE_DOCUMENT_TYPE_CODE}`,
+      },
+    ],
   });
   res.status(200).json(resources.filter(isSystemUseNotice));
 });
@@ -137,27 +137,22 @@ systemUseNoticeAdminRouter.post('/projects/:projectId/policy', async (req: Reque
   const policy = createSystemUseNoticeProjectPolicyExtension({ enabled: req.body.enabled, activeNotice });
   const extension = (project.extension ?? []).filter((item) => item.url !== SYSTEM_USE_NOTICE_POLICY_URL);
   extension.push(policy);
-  res.status(200).json(await systemRepo.updateResource({ ...project, extension }));
+  res.status(200).json(await getGlobalSystemRepo().updateResource({ ...project, extension }));
 });
 
-function isSystemUseNotice(resource: DocumentReference): boolean {
-  return resource.meta?.profile?.includes(SYSTEM_USE_NOTICE_PROFILE_URL) === true;
-}
-
 async function assertVersionUnique(repo: Repository, version: string, excludeId?: string): Promise<void> {
-  const resources = await repo.searchResources<DocumentReference>({
+  const matches = await repo.searchResources<DocumentReference>({
     resourceType: 'DocumentReference',
-    count: 1000,
+    count: 2,
+    filters: [
+      {
+        code: 'identifier',
+        operator: Operator.EQUALS,
+        value: `${SYSTEM_USE_NOTICE_VERSION_IDENTIFIER_SYSTEM}|${version}`,
+      },
+    ],
   });
-  if (
-    resources.some(
-      (resource) =>
-        resource.id !== excludeId &&
-        isSystemUseNotice(resource) &&
-        resource.masterIdentifier?.system === SYSTEM_USE_NOTICE_VERSION_IDENTIFIER_SYSTEM &&
-        resource.masterIdentifier.value === version
-    )
-  ) {
+  if (matches.some((resource) => resource.id !== excludeId && isSystemUseNotice(resource))) {
     throw new OperationOutcomeError(badRequest('Notice version already exists'));
   }
 }

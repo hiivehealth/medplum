@@ -40,7 +40,7 @@ import {
   sleep,
   stringify,
   SYSTEM_USE_NOTICE_POLICY_URL,
-  SYSTEM_USE_NOTICE_PROFILE_URL,
+  isSystemUseNotice,
   toTypedValue,
   validateResourceType,
 } from '@medplum/core';
@@ -2738,18 +2738,7 @@ function asSystemRepository(repo: Repository): SystemRepository {
 }
 
 function isFinalSystemUseNotice(resource: Resource | undefined): boolean {
-  return (
-    resource?.resourceType === 'DocumentReference' &&
-    resource.meta?.profile?.includes(SYSTEM_USE_NOTICE_PROFILE_URL) === true &&
-    resource.docStatus === 'final'
-  );
-}
-
-function isSystemUseNotice(resource: Resource | undefined): boolean {
-  return (
-    resource?.resourceType === 'DocumentReference' &&
-    resource.meta?.profile?.includes(SYSTEM_USE_NOTICE_PROFILE_URL) === true
-  );
+  return resource?.resourceType === 'DocumentReference' && resource.docStatus === 'final' && isSystemUseNotice(resource);
 }
 
 function getSystemUseNoticePolicyExtension(resource: Resource | undefined): unknown {

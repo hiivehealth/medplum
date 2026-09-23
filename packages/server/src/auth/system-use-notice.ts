@@ -4,13 +4,12 @@ import {
   badRequest,
   decodeBase64,
   getSystemUseNoticeProjectPolicy,
+  isSystemUseNotice,
   isUUID,
-  MAX_SYSTEM_USE_NOTICE_VERSION_LENGTH,
   OperationOutcomeError,
   SYSTEM_USE_NOTICE_ACTION_LABEL,
   SYSTEM_USE_NOTICE_DOCUMENT_TYPE_CODE,
   SYSTEM_USE_NOTICE_DOCUMENT_TYPE_SYSTEM,
-  SYSTEM_USE_NOTICE_PROFILE_URL,
   SYSTEM_USE_NOTICE_VERSION_IDENTIFIER_SYSTEM,
 } from '@medplum/core';
 import type { WithId } from '@medplum/core';
@@ -29,9 +28,6 @@ const GENERIC_LOGIN_ERROR = 'Invalid login request';
 const NOTICE_UNAVAILABLE_ERROR = 'System use notice is unavailable';
 const LOGIN_NOTICE_CACHE_PREFIX = 'login:system-use-notice:';
 const LOGIN_NOTICE_TTL_SECONDS = 60 * 60;
-const MAX_NOTICE_TITLE_LENGTH = 256;
-const MAX_NOTICE_BODY_LENGTH = 64 * 1024;
-const VERSION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 
 export interface ResolvedSystemUseNotice {
   readonly enabled: boolean;
@@ -91,45 +87,44 @@ export async function resolveSystemUseNotice(projectId: string | undefined): Pro
       if (!policy.enabled) {
         return { enabled: false };
       }
-      selectedReference = policy.activeNotice as Reference<DocumentReference> | undefined;
-      selectedProject = project;
-      if (!selectedReference?.reference) {
-        throw new OperationOutcomeError(badRequest(NOTICE_UNAVAILABLE_ERROR));
+      if (!policy.activeNotice?.reference) {
+        throw unavailable();
       }
+      selectedReference = policy.activeNotice as Reference<DocumentReference>;
+      selectedProject = project;
     }
   }
 
-  if (!selectedReference) {
+  if (!selectedReference || !selectedProject) {
     const fallback = getConfig().systemUseNotice;
     if (!fallback.enabledByDefault) {
       return { enabled: false };
     }
-    if (!fallback.defaultNoticeReference) {
-      throw new OperationOutcomeError(badRequest(NOTICE_UNAVAILABLE_ERROR));
-    }
-    if (!fallback.defaultNoticeProjectId) {
-      throw new OperationOutcomeError(badRequest(NOTICE_UNAVAILABLE_ERROR));
+    if (!fallback.defaultNoticeReference || !fallback.defaultNoticeProjectId) {
+      throw unavailable();
     }
     selectedReference = { reference: fallback.defaultNoticeReference };
     try {
       selectedProject = await systemRepo.readResource<Project>('Project', fallback.defaultNoticeProjectId);
     } catch {
-      throw new OperationOutcomeError(badRequest(NOTICE_UNAVAILABLE_ERROR));
+      throw unavailable();
     }
   }
 
-  let content: { version: string; title: string; body: string };
   try {
-    const projectRepo = await getProjectSystemRepo(selectedProject as WithId<Project>);
+    const projectRepo = await getProjectSystemRepo(selectedProject);
     const notice = await projectRepo.readReference<DocumentReference>(selectedReference);
-    if (notice.meta?.project !== selectedProject?.id) {
+    if (notice.meta?.project !== selectedProject.id) {
       throw new Error('Notice belongs to another Project');
     }
-    content = await readAndValidateSystemUseNotice(projectRepo, notice, true);
+    return {
+      enabled: true,
+      reference: selectedReference,
+      ...(await readAndValidateSystemUseNotice(projectRepo, notice, true)),
+    };
   } catch {
-    throw new OperationOutcomeError(badRequest(NOTICE_UNAVAILABLE_ERROR));
+    throw unavailable();
   }
-  return { enabled: true, reference: selectedReference, ...content };
 }
 
 /** Fails server startup when the enabled secure fallback cannot be resolved. */
@@ -151,8 +146,6 @@ export function assertSystemUseNoticeAcknowledged(
   }
   if (
     typeof submittedVersion !== 'string' ||
-    submittedVersion.length > MAX_SYSTEM_USE_NOTICE_VERSION_LENGTH ||
-    !VERSION_PATTERN.test(submittedVersion) ||
     submittedVersion !== notice.version
   ) {
     throw new OperationOutcomeError(badRequest(GENERIC_LOGIN_ERROR));
@@ -171,25 +164,22 @@ export function validateSystemUseNotice(
   const attachment = notice.content?.[0]?.attachment;
   const title = notice.description;
   if (
-    !notice.meta?.profile?.includes(SYSTEM_USE_NOTICE_PROFILE_URL) ||
+    !isSystemUseNotice(notice) ||
     notice.masterIdentifier?.system !== SYSTEM_USE_NOTICE_VERSION_IDENTIFIER_SYSTEM ||
     !version ||
-    version.length > MAX_SYSTEM_USE_NOTICE_VERSION_LENGTH ||
-    !VERSION_PATTERN.test(version) ||
     notice.status !== 'current' ||
     (requireFinal && notice.docStatus !== 'final') ||
     notice.type?.coding?.length !== 1 ||
     notice.type.coding[0].system !== SYSTEM_USE_NOTICE_DOCUMENT_TYPE_SYSTEM ||
     notice.type.coding[0].code !== SYSTEM_USE_NOTICE_DOCUMENT_TYPE_CODE ||
     !title ||
-    title.length > MAX_NOTICE_TITLE_LENGTH ||
     notice.content?.length !== 1 ||
     attachment?.contentType !== 'text/plain' ||
     attachment.language !== 'en-US' ||
     (!attachment.data && !attachment.url) ||
     !attachment.hash
   ) {
-    throw new OperationOutcomeError(badRequest(NOTICE_UNAVAILABLE_ERROR));
+    throw unavailable();
   }
 
   let body: string;
@@ -205,10 +195,10 @@ export function validateSystemUseNotice(
     }
     body = decodeBase64(attachment.data);
   } catch {
-    throw new OperationOutcomeError(badRequest(NOTICE_UNAVAILABLE_ERROR));
+    throw unavailable();
   }
-  if (!body.trim() || Buffer.byteLength(body, 'utf8') > MAX_NOTICE_BODY_LENGTH) {
-    throw new OperationOutcomeError(badRequest(NOTICE_UNAVAILABLE_ERROR));
+  if (!body.trim()) {
+    throw unavailable();
   }
   return { version, title, body };
 }
@@ -227,11 +217,11 @@ export async function readAndValidateSystemUseNotice(
     return validateSystemUseNotice(notice, requireFinal);
   }
   if (!attachment?.url?.startsWith('Binary/')) {
-    throw new OperationOutcomeError(badRequest(NOTICE_UNAVAILABLE_ERROR));
+    throw unavailable();
   }
   const binary = await repo.readReference<Binary>({ reference: attachment.url });
   if (binary.contentType !== 'text/plain' || !binary.data) {
-    throw new OperationOutcomeError(badRequest(NOTICE_UNAVAILABLE_ERROR));
+    throw unavailable();
   }
   return validateSystemUseNotice(
     {
@@ -250,11 +240,10 @@ export async function consumeSystemUseNoticeVersion(loginId: string | undefined)
   if (!loginId) {
     return undefined;
   }
-  const redis = getCacheRedis();
-  const key = LOGIN_NOTICE_CACHE_PREFIX + loginId;
-  const version = await redis.get(key);
-  if (version) {
-    await redis.del(key);
-  }
+  const version = await getCacheRedis().getdel(LOGIN_NOTICE_CACHE_PREFIX + loginId);
   return version ?? undefined;
+}
+
+function unavailable(): OperationOutcomeError {
+  return new OperationOutcomeError(badRequest(NOTICE_UNAVAILABLE_ERROR));
 }
