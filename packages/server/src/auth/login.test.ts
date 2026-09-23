@@ -7,12 +7,13 @@ import {
   createSystemUseNoticeProjectPolicyExtension,
   encodeBase64,
   LOINC,
+  Operator,
   SYSTEM_USE_NOTICE_DOCUMENT_TYPE_CODE,
   SYSTEM_USE_NOTICE_DOCUMENT_TYPE_SYSTEM,
   SYSTEM_USE_NOTICE_PROFILE_URL,
   SYSTEM_USE_NOTICE_VERSION_IDENTIFIER_SYSTEM,
 } from '@medplum/core';
-import type { ClientApplication, DocumentReference, Project } from '@medplum/fhirtypes';
+import type { AuditEvent, ClientApplication, DocumentReference, Project } from '@medplum/fhirtypes';
 import type { AwsClientStub } from 'aws-sdk-client-mock';
 import { mockClient } from 'aws-sdk-client-mock';
 import { createHash, randomUUID } from 'crypto';
@@ -227,8 +228,10 @@ describe('Login', () => {
     );
 
     const previousLogAuditEvents = getConfig().logAuditEvents;
+    const previousSaveAuditEvents = getConfig().saveAuditEvents;
     const logSpy = vi.spyOn(globalLogger, 'write' as any).mockImplementation(() => undefined);
     getConfig().logAuditEvents = true;
+    getConfig().saveAuditEvents = true;
     try {
       const discovery = await request(app).get('/auth/system-use-notice').query({ clientId: client.id });
       expect(discovery).toHaveStatus(200);
@@ -274,8 +277,17 @@ describe('Login', () => {
         url: 'https://ehr.hiivehealth.net/fhir/StructureDefinition/system-use-notice-version',
         valueString: version,
       });
+
+      const saved = await withTestContext(() =>
+        projectSystemRepo.searchResources<AuditEvent>({
+          resourceType: 'AuditEvent',
+          filters: [{ code: 'subtype', operator: Operator.EQUALS, value: '110122' }],
+        })
+      );
+      expect(saved.some((event) => event.extension?.some((item) => item.valueString === version))).toBe(true);
     } finally {
       getConfig().logAuditEvents = previousLogAuditEvents;
+      getConfig().saveAuditEvents = previousSaveAuditEvents;
       logSpy.mockRestore();
       const updatedProject = await systemRepo.readResource<Project>('Project', project.id);
       await withTestContext(() =>

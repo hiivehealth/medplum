@@ -510,6 +510,13 @@ export async function setLoginMembership(
     { systemUseNoticeVersion: await consumeSystemUseNoticeVersion(login.id) }
   );
   logAuditEvent(auditEvent);
+  if (getConfig().saveAuditEvents) {
+    try {
+      await projectSystemRepo.createResource(auditEvent);
+    } catch (err) {
+      getLogger().error('Failed to save login AuditEvent', { err });
+    }
+  }
 
   // Everything checks out, update the login
   const updatedLogin: Login = {
