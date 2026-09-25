@@ -40,7 +40,13 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import { authenticator } from 'otplib';
 import { getUserConfiguration } from '../auth/me';
-import { consumeSystemUseNoticeVersion, rememberSystemUseNoticeVersion } from '../auth/system-use-notice';
+import {
+  assertSystemUseNoticeAcknowledged,
+  consumeSystemUseNoticeVersion,
+  readSystemUseNoticeVersion,
+  rememberSystemUseNoticeVersion,
+  resolveSystemUseNotice,
+} from '../auth/system-use-notice';
 import { getConfig } from '../config/loader';
 import { getAccessPolicyForLogin, getRepoForLogin } from '../fhir/accesspolicy';
 import type { Repository, SystemRepository } from '../fhir/repo';
@@ -435,6 +441,7 @@ export function getClientApplicationMembership(
  * Some users have multiple memberships, so this happens after choosing a profile.
  * @param login - The login before the membership is set.
  * @param membership - The membership to set.
+ * @param systemUseNoticeVersion - notice version before login.
  * @returns The updated login.
  */
 export async function setLoginMembership(
@@ -499,6 +506,20 @@ export async function setLoginMembership(
   const accessPolicy = await getAccessPolicyForLogin({ project, login, membership, userConfig, smartAppLaunch });
   await checkIpAccessRules(login, accessPolicy);
 
+  const submittedNoticeVersion = systemUseNoticeVersion ?? (await readSystemUseNoticeVersion(login.id));
+  let recordedNoticeVersion = submittedNoticeVersion;
+  if (login.authMethod === 'password') {
+    try {
+      recordedNoticeVersion = assertSystemUseNoticeAcknowledged(
+        await resolveSystemUseNotice(project.id),
+        submittedNoticeVersion
+      );
+    } catch {
+      throw new OperationOutcomeError(badRequest('Invalid login request'));
+    }
+  }
+  await consumeSystemUseNoticeVersion(login.id);
+
   const auditEvent = createAuditEvent(
     UserAuthenticationEvent,
     LoginEvent,
@@ -506,7 +527,7 @@ export async function setLoginMembership(
     membership.profile,
     login.remoteAddress,
     AuditEventOutcome.Success,
-    { systemUseNoticeVersion: systemUseNoticeVersion ?? (await consumeSystemUseNoticeVersion(login.id)) }
+    { systemUseNoticeVersion: recordedNoticeVersion }
   );
   logAuditEvent(auditEvent);
   if (getConfig().saveAuditEvents) {

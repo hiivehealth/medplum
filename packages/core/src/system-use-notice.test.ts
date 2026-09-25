@@ -34,6 +34,14 @@ describe('System use notice', () => {
         meta: { profile: ['https://ehr.hiivehealth.net/fhir/StructureDefinition/hiive-system-use-notice'] },
       } as Resource)
     ).toBe(true);
+    expect(
+      isSystemUseNotice({
+        resourceType: 'DocumentReference',
+        meta: {
+          profile: ['https://evil.example/https://ehr.hiivehealth.net/fhir/StructureDefinition/hiive-system-use-notice'],
+        },
+      } as Resource)
+    ).toBe(false);
     expect(isSystemUseNotice({ resourceType: 'DocumentReference' } as Resource)).toBe(false);
     expect(isSystemUseNotice({ resourceType: 'Patient' } as Resource)).toBe(false);
   });

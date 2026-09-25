@@ -9,7 +9,12 @@ import {
 } from '@medplum/core';
 import type { DocumentReference } from '@medplum/fhirtypes';
 import { createHash } from 'node:crypto';
-import { assertSystemUseNoticeAcknowledged, validateSystemUseNotice } from './system-use-notice';
+import type { Repository } from '../fhir/repo';
+import {
+  assertSystemUseNoticeAcknowledged,
+  readAndValidateSystemUseNotice,
+  validateSystemUseNotice,
+} from './system-use-notice';
 
 function makeNotice(body = 'Approved notice'): DocumentReference {
   return {
@@ -64,5 +69,25 @@ describe('System use notice', () => {
     expect(() => assertSystemUseNoticeAcknowledged(enabled, 'v1')).toThrow('Invalid login request');
     expect(assertSystemUseNoticeAcknowledged(enabled, 'v2')).toBe('v2');
     expect(assertSystemUseNoticeAcknowledged({ enabled: false }, 'unsolicited')).toBeUndefined();
+  });
+
+  test('Rejects a Binary attachment from another project', async () => {
+    const body = 'Approved notice';
+    const notice = makeNotice(body);
+    notice.meta = { ...notice.meta, project: 'project-1' };
+    notice.content[0].attachment.data = undefined;
+    notice.content[0].attachment.url = 'Binary/11111111-1111-4111-8111-111111111111';
+    const repo = {
+      readReference: vi.fn(async () => ({
+        resourceType: 'Binary',
+        meta: { project: 'project-2' },
+        contentType: 'text/plain',
+        data: encodeBase64(body),
+      })),
+    } as unknown as Repository;
+
+    await expect(readAndValidateSystemUseNotice(repo, notice, true)).rejects.toThrow(
+      'System use notice is unavailable'
+    );
   });
 });

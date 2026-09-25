@@ -70,6 +70,6 @@ export function createSystemUseNoticeProjectPolicyExtension(policy: SystemUseNot
 export function isSystemUseNotice(resource: Resource | undefined): resource is DocumentReference {
   return (
     resource?.resourceType === 'DocumentReference' &&
-    resource.meta?.profile?.includes(SYSTEM_USE_NOTICE_PROFILE_URL) === true
+    resource.meta?.profile?.some((profile) => profile === SYSTEM_USE_NOTICE_PROFILE_URL) === true
   );
 }

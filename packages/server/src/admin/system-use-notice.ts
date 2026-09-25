@@ -127,11 +127,11 @@ systemUseNoticeAdminRouter.post('/projects/:projectId/policy', async (req: Reque
       throw new OperationOutcomeError(badRequest('Invalid activeNotice'));
     }
     activeNotice = { reference: req.body.activeNotice };
-    await readAndValidateSystemUseNotice(
-      systemRepo,
-      await systemRepo.readReference<DocumentReference>(activeNotice),
-      true
-    );
+    const notice = await systemRepo.readReference<DocumentReference>(activeNotice);
+    if (notice.meta?.project !== project.id) {
+      throw new OperationOutcomeError(badRequest('Invalid activeNotice'));
+    }
+    await readAndValidateSystemUseNotice(systemRepo, notice, true);
   }
 
   const policy = createSystemUseNoticeProjectPolicyExtension({ enabled: req.body.enabled, activeNotice });

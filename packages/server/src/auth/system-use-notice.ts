@@ -220,7 +220,12 @@ export async function readAndValidateSystemUseNotice(
     throw unavailable();
   }
   const binary = await repo.readReference<Binary>({ reference: attachment.url });
-  if (binary.contentType !== 'text/plain' || !binary.data) {
+  if (
+    !notice.meta?.project ||
+    binary.meta?.project !== notice.meta.project ||
+    binary.contentType !== 'text/plain' ||
+    !binary.data
+  ) {
     throw unavailable();
   }
   return validateSystemUseNotice(
@@ -234,6 +239,14 @@ export async function readAndValidateSystemUseNotice(
 
 export async function rememberSystemUseNoticeVersion(loginId: string, version: string): Promise<void> {
   await getCacheRedis().set(LOGIN_NOTICE_CACHE_PREFIX + loginId, version, 'EX', LOGIN_NOTICE_TTL_SECONDS);
+}
+
+export async function readSystemUseNoticeVersion(loginId: string | undefined): Promise<string | undefined> {
+  if (!loginId) {
+    return undefined;
+  }
+  const version = await getCacheRedis().get(LOGIN_NOTICE_CACHE_PREFIX + loginId);
+  return version ?? undefined;
 }
 
 export async function consumeSystemUseNoticeVersion(loginId: string | undefined): Promise<string | undefined> {
