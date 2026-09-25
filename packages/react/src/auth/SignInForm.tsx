@@ -1,13 +1,15 @@
 // SPDX-FileCopyrightText: Copyright Orangebot, Inc. and Medplum contributors
 // SPDX-License-Identifier: Apache-2.0
+import { Alert, Button, Stack, Text } from '@mantine/core';
 import { showNotification } from '@mantine/notifications';
-import type { BaseLoginRequest, LoginAuthenticationResponse } from '@medplum/core';
+import type { BaseLoginRequest, LoginAuthenticationResponse, SystemUseNoticeResponse } from '@medplum/core';
 import { normalizeErrorString } from '@medplum/core';
 import type { ProjectMembership } from '@medplum/fhirtypes';
 import { useMedplum } from '@medplum/react-hooks';
 import type { JSX, ReactNode } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Document } from '../Document/Document';
+import { Modal } from '../Modal/Modal';
 import { AuthenticationForm } from './AuthenticationForm';
 import { ChooseProfileForm } from './ChooseProfileForm';
 import type { ChooseScopeFormProps } from './ChooseScopeForm';
@@ -64,6 +66,34 @@ export function SignInForm(props: SignInFormProps): JSX.Element {
   const [mfaEmail, setMfaEmail] = useState<string>();
   const [mfaEmailMode, setMfaEmailMode] = useState(false);
   const [memberships, setMemberships] = useState<ProjectMembership[]>();
+  const [notice, setNotice] = useState<SystemUseNoticeResponse | undefined>(loginCode ? { enabled: false } : undefined);
+  const [noticeVersion, setNoticeVersion] = useState<string>();
+  const [noticeError, setNoticeError] = useState(false);
+  const [noticeRequest, setNoticeRequest] = useState(0);
+
+  useEffect(() => {
+    if (loginCode || login) {
+      return;
+    }
+    let active = true;
+    setNotice(undefined);
+    setNoticeError(false);
+    medplum
+      .getSystemUseNotice({ clientId: props.clientId, projectId: props.projectId })
+      .then((result) => {
+        if (active) {
+          setNotice(result);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setNoticeError(true);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [medplum, login, loginCode, noticeRequest, props.clientId, props.projectId]);
 
   const handleCode = useCallback(
     (code: string): void => {
@@ -165,6 +195,38 @@ export function SignInForm(props: SignInFormProps): JSX.Element {
   return (
     <Document width={400} px="xl" py="xl" bdrs="md">
       {(() => {
+        if (!login && noticeError) {
+          return (
+            <Alert title="Sign in unavailable" color="red">
+              <Stack>
+                <Text>The system use notice could not be loaded. Credentials cannot be entered.</Text>
+                <Button onClick={() => setNoticeRequest((value) => value + 1)}>Retry</Button>
+              </Stack>
+            </Alert>
+          );
+        }
+        if (!login && !notice) {
+          return <Text ta="center">Loading system use notice…</Text>;
+        }
+        if (!login && notice?.enabled && noticeVersion !== notice.version) {
+          return (
+            <Modal
+              opened
+              onClose={() => undefined}
+              withCloseButton={false}
+              closeOnClickOutside={false}
+              closeOnEscape={false}
+              title={notice.title}
+              actions={
+                <Button fullWidth onClick={() => setNoticeVersion(notice.version)}>
+                  {notice.actionLabel}
+                </Button>
+              }
+            >
+              <Text style={{ whiteSpace: 'pre-wrap' }}>{notice.body}</Text>
+            </Modal>
+          );
+        }
         if (!login) {
           return (
             <AuthenticationForm
@@ -173,6 +235,7 @@ export function SignInForm(props: SignInFormProps): JSX.Element {
               handleAuthResponse={handleAuthResponse}
               disableGoogleAuth={props.disableGoogleAuth}
               disableEmailAuth={props.disableEmailAuth}
+              systemUseNoticeVersion={noticeVersion}
               {...baseLoginRequest}
             >
               {props.children}

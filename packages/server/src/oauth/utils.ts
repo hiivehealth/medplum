@@ -40,6 +40,13 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import { authenticator } from 'otplib';
 import { getUserConfiguration } from '../auth/me';
+import {
+  assertSystemUseNoticeAcknowledged,
+  consumeSystemUseNoticeVersion,
+  readSystemUseNoticeVersion,
+  rememberSystemUseNoticeVersion,
+  resolveSystemUseNotice,
+} from '../auth/system-use-notice';
 import { getConfig } from '../config/loader';
 import { getAccessPolicyForLogin, getRepoForLogin } from '../fhir/accesspolicy';
 import type { Repository, SystemRepository } from '../fhir/repo';
@@ -88,6 +95,8 @@ export interface LoginRequest {
   readonly forceUseFirstMembership?: boolean;
   /** @deprecated Use "offline_access" scope instead. */
   readonly remember?: boolean;
+  /** Validated system use notice version for this password login only. */
+  readonly systemUseNoticeVersion?: string;
 }
 
 export interface TokenResult {
@@ -214,11 +223,13 @@ export async function tryLogin(request: LoginRequest): Promise<WithId<Login>> {
     throw new OperationOutcomeError(badRequest('User not found'));
   }
 
-  if (memberships.length === 1 || request.forceUseFirstMembership) {
-    return setLoginMembership(login, memberships[0]);
-  } else {
-    return login;
+  if ((memberships.length === 1 || request.forceUseFirstMembership) && memberships[0]) {
+    return setLoginMembership(login, memberships[0], request.systemUseNoticeVersion);
   }
+  if (request.systemUseNoticeVersion) {
+    await rememberSystemUseNoticeVersion(login.id, request.systemUseNoticeVersion);
+  }
+  return login;
 }
 
 export function validateLoginRequest(request: LoginRequest): void {
@@ -430,11 +441,13 @@ export function getClientApplicationMembership(
  * Some users have multiple memberships, so this happens after choosing a profile.
  * @param login - The login before the membership is set.
  * @param membership - The membership to set.
+ * @param systemUseNoticeVersion - notice version before login.
  * @returns The updated login.
  */
 export async function setLoginMembership(
   login: WithId<Login>,
-  membership: WithId<ProjectMembership>
+  membership: WithId<ProjectMembership>,
+  systemUseNoticeVersion?: string
 ): Promise<WithId<Login>> {
   if (login.revoked) {
     throw new OperationOutcomeError(badRequest('Login revoked'));
@@ -493,15 +506,37 @@ export async function setLoginMembership(
   const accessPolicy = await getAccessPolicyForLogin({ project, login, membership, userConfig, smartAppLaunch });
   await checkIpAccessRules(login, accessPolicy);
 
+  const submittedNoticeVersion = systemUseNoticeVersion ?? (await readSystemUseNoticeVersion(login.id));
+  let recordedNoticeVersion = submittedNoticeVersion;
+  if (login.authMethod === 'password') {
+    try {
+      recordedNoticeVersion = assertSystemUseNoticeAcknowledged(
+        await resolveSystemUseNotice(project.id),
+        submittedNoticeVersion
+      );
+    } catch {
+      throw new OperationOutcomeError(badRequest('Invalid login request'));
+    }
+  }
+  await consumeSystemUseNoticeVersion(login.id);
+
   const auditEvent = createAuditEvent(
     UserAuthenticationEvent,
     LoginEvent,
     project.id,
     membership.profile,
     login.remoteAddress,
-    AuditEventOutcome.Success
+    AuditEventOutcome.Success,
+    { systemUseNoticeVersion: recordedNoticeVersion }
   );
   logAuditEvent(auditEvent);
+  if (getConfig().saveAuditEvents) {
+    try {
+      await projectSystemRepo.createResource(auditEvent);
+    } catch (err) {
+      getLogger().error('Failed to save login AuditEvent', { err });
+    }
+  }
 
   // Everything checks out, update the login
   const updatedLogin: Login = {

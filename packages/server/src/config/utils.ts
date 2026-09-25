@@ -36,6 +36,7 @@ export function addDefaults(config: MedplumServerConfig): ServerConfig {
   config.defaultBotRuntimeVersion ??= 'awslambda';
   config.defaultProjectFeatures ??= [];
   config.defaultProjectSystemSetting ??= [];
+  config.systemUseNotice ??= { enabledByDefault: true };
   config.emailProvider ||= config.smtp ? 'smtp' : 'awsses';
   config.dispatchEnabled ??= true;
   config.subscriptionsEnabled ??= true;
@@ -107,6 +108,7 @@ type DefaultConfigKeys =
   | 'defaultBotRuntimeVersion'
   | 'defaultProjectFeatures'
   | 'defaultProjectSystemSetting'
+  | 'systemUseNotice'
   | 'emailProvider'
   | 'dispatchEnabled'
   | 'subscriptionsEnabled'
@@ -204,6 +206,7 @@ const booleanKeys = new Set([
   'rejectUnauthorized',
   'fhirSearchDiscourageSeqScan',
   'redactAuditEvents',
+  'systemUseNotice.enabledByDefault',
   'dataWarehouse.enabled',
 ]);
 
@@ -217,6 +220,7 @@ const objectKeys = new Set([
   'ssl',
   'defaultProjectFeatures',
   'defaultProjectSystemSetting',
+  'systemUseNotice',
   'defaultOAuthClients',
   'externalAuthProviders',
   'smtp',

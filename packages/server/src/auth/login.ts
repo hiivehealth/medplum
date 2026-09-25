@@ -1,5 +1,6 @@
 // SPDX-FileCopyrightText: Copyright Orangebot, Inc. and Medplum contributors
 // SPDX-License-Identifier: Apache-2.0
+import { badRequest, OperationOutcomeError } from '@medplum/core';
 import type { ResourceType } from '@medplum/fhirtypes';
 import type { Request, Response } from 'express';
 import { body } from 'express-validator';
@@ -8,6 +9,7 @@ import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from '../constants';
 import { getLogger } from '../logger';
 import { tryLogin } from '../oauth/utils';
 import { makeValidationMiddleware } from '../util/validator';
+import { assertSystemUseNoticeAcknowledged, resolveSystemUseNotice } from './system-use-notice';
 import { getProjectIdByClientId, sendLoginResult } from './utils';
 
 export const loginValidator = makeValidationMiddleware([
@@ -31,6 +33,14 @@ export async function loginHandler(req: Request, res: Response): Promise<void> {
   // The only rule is that they have to match
   const clientId = req.body.clientId;
   const projectId = await getProjectIdByClientId(req.body.clientId, req.body.projectId as string | undefined);
+  let systemUseNoticeVersion: string | undefined;
+  try {
+    const notice = await resolveSystemUseNotice(projectId);
+    systemUseNoticeVersion = assertSystemUseNoticeAcknowledged(notice, req.body.systemUseNoticeVersion);
+  } catch {
+    // Do not disclose whether policy, resource, or submitted version was invalid.
+    throw new OperationOutcomeError(badRequest('Invalid login request'));
+  }
 
   try {
     const login = await tryLogin({
@@ -50,6 +60,7 @@ export async function loginHandler(req: Request, res: Response): Promise<void> {
       userAgent: req.get('User-Agent'),
       allowNoMembership: req.body.projectId === 'new',
       origin: req.get('Origin'),
+      systemUseNoticeVersion,
     });
     getLogger().info('Login success', { email: req.body.email, projectId });
     await sendLoginResult(res, login);

@@ -615,6 +615,10 @@ export class MockFetchClient {
   }
 
   private mockAuthHandler(method: HttpMethod, path: string, options: any): any {
+    if (path.startsWith('auth/system-use-notice')) {
+      return { enabled: false };
+    }
+
     if (path.startsWith('auth/method')) {
       return {};
     }

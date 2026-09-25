@@ -14,7 +14,20 @@ function mockFetch(url: string, options: any): Promise<any> {
   let status = 404;
   let result: any;
 
-  if (options.method === 'POST' && url.endsWith('/auth/method')) {
+  if (options.method === 'GET' && url.includes('/auth/system-use-notice')) {
+    status = 200;
+    if (url.includes('projectId=notice-enabled')) {
+      result = {
+        enabled: true,
+        version: 'usg-system-use-2026-09-10',
+        title: 'U.S. Government System Use Acknowledgment',
+        body: 'Approved notice text',
+        actionLabel: 'OK',
+      };
+    } else {
+      result = { enabled: false };
+    }
+  } else if (options.method === 'POST' && url.endsWith('/auth/method')) {
     const { email } = JSON.parse(options.body);
     status = 200;
     if (email === 'alice@external.example.com') {
@@ -270,6 +283,34 @@ describe('SignInForm', () => {
     await setup();
     const input = screen.getByText('Sign in to Medplum');
     expect(input.innerHTML).toBe('Sign in to Medplum');
+  });
+
+  test('Blocks credentials until current notice is acknowledged', async () => {
+    const startLogin = vi.spyOn(medplum, 'startLogin');
+    await setup({ projectId: 'notice-enabled' });
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByText('Approved notice text')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Email', { exact: false })).not.toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    });
+    fireEvent.change(await screen.findByLabelText('Email', { exact: false }), {
+      target: { value: 'admin@example.com' },
+    });
+    fireEvent.click(screen.getByText('Continue'));
+    fireEvent.change(await screen.findByLabelText('Password', { exact: false, selector: 'input' }), {
+      target: { value: 'admin' },
+    });
+    fireEvent.click(screen.getByText('Sign In'));
+
+    await waitFor(() =>
+      expect(startLogin).toHaveBeenCalledWith(
+        expect.objectContaining({ systemUseNoticeVersion: 'usg-system-use-2026-09-10' })
+      )
+    );
+    startLogin.mockRestore();
   });
 
   test('Submit success', async () => {

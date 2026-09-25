@@ -20,6 +20,7 @@ import { join } from 'node:path';
 import { adminRouter } from './admin/routes';
 import { asyncBatchHandler } from './async-batch';
 import { authRouter } from './auth/routes';
+import { validateDefaultSystemUseNotice } from './auth/system-use-notice';
 import { cdsRouter } from './cds/routes';
 import { getConfig } from './config/loader';
 import type { MedplumServerConfig } from './config/types';
@@ -278,6 +279,7 @@ export async function initAppServices(config: MedplumServerConfig): Promise<void
   await initDatabase(config);
   await initWorkers(config);
   await seedDatabase(config);
+  await validateDefaultSystemUseNotice();
   await initKeys(config);
   initBinaryStorage(config.binaryStorage);
   initHeartbeat(config);
