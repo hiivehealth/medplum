@@ -9,6 +9,7 @@ import {
   isResource,
   isResourceWithId,
   resolveId,
+  SYSTEM_USE_NOTICE_VERSION_URL,
 } from '@medplum/core';
 import type {
   AuditEvent,
@@ -213,6 +214,8 @@ export function createAuditEvent(
      * where the client would otherwise be absent from the audit trail.
      */
     client?: Reference<ClientApplication>;
+    /** Validated opaque notice version for a successful password login. */
+    systemUseNoticeVersion?: string;
   }
 ): AuditEvent {
   const config = getConfig();
@@ -240,6 +243,12 @@ export function createAuditEvent(
   }
   if (options?.durationMs) {
     extension = append(extension, buildDurationExtension(options.durationMs));
+  }
+  if (options?.systemUseNoticeVersion) {
+    extension = append(extension, {
+      url: SYSTEM_USE_NOTICE_VERSION_URL,
+      valueString: options.systemUseNoticeVersion,
+    });
   }
 
   const agent: AuditEventAgent[] = [

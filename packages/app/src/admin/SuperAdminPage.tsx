@@ -13,6 +13,7 @@ import {
   NumberInput,
   Stack,
   Text,
+  Textarea,
   TextInput,
   Title,
 } from '@mantine/core';
@@ -58,6 +59,31 @@ export function SuperAdminPage(): JSX.Element {
 
   function rebuildStructureDefinitions(): void {
     startAsyncJob(medplum, 'Rebuilding Structure Definitions', 'admin/super/structuredefinitions');
+  }
+
+  function createSystemUseNotice(formData: Record<string, string>): void {
+    const { projectId, ...notice } = formData;
+    medplum
+      .post(`admin/super/system-use-notices/projects/${projectId}/notices`, notice)
+      .then(() => showNotification({ color: 'green', message: 'System use notice draft created' }))
+      .catch((err) => showNotification({ color: 'red', message: normalizeErrorString(err), autoClose: false }));
+  }
+
+  function publishSystemUseNotice(formData: Record<string, string>): void {
+    medplum
+      .post(`admin/super/system-use-notices/projects/${formData.projectId}/notices/${formData.id}/publish`, {})
+      .then(() => showNotification({ color: 'green', message: 'System use notice published' }))
+      .catch((err) => showNotification({ color: 'red', message: normalizeErrorString(err), autoClose: false }));
+  }
+
+  function setProjectSystemUseNotice(formData: Record<string, string>): void {
+    medplum
+      .post(`admin/super/system-use-notices/projects/${formData.projectId}/policy`, {
+        enabled: formData.enabled === 'on',
+        activeNotice: formData.enabled === 'on' ? `DocumentReference/${formData.noticeId}` : undefined,
+      })
+      .then(() => showNotification({ color: 'green', message: 'Project system use notice policy saved' }))
+      .catch((err) => showNotification({ color: 'red', message: normalizeErrorString(err), autoClose: false }));
   }
 
   function rebuildSearchParameters(): void {
@@ -171,6 +197,33 @@ export function SuperAdminPage(): JSX.Element {
   return (
     <Document width={600}>
       <Title order={1}>Super Admin</Title>
+      <Divider my="lg" />
+      <Title order={2}>System Use Notices</Title>
+      <Text mb="md">Create an approved version, publish it to make it immutable, then activate it for a Project.</Text>
+      <Form onSubmit={createSystemUseNotice}>
+        <Stack>
+          <TextInput name="projectId" label="Project ID" required />
+          <TextInput name="version" label="Version" required />
+          <TextInput name="title" label="Title" required />
+          <Textarea name="body" label="Body" minRows={8} required />
+          <Button type="submit">Create draft</Button>
+        </Stack>
+      </Form>
+      <Form onSubmit={publishSystemUseNotice}>
+        <Group mt="md" align="end">
+          <TextInput name="projectId" label="Project ID" required style={{ flex: 1 }} />
+          <TextInput name="id" label="Draft DocumentReference ID" required style={{ flex: 1 }} />
+          <Button type="submit">Publish</Button>
+        </Group>
+      </Form>
+      <Form onSubmit={setProjectSystemUseNotice}>
+        <Stack mt="md">
+          <TextInput name="projectId" label="Project ID" required />
+          <TextInput name="noticeId" label="Final DocumentReference ID" />
+          <Checkbox name="enabled" label="Require notice for password login" />
+          <Button type="submit">Save Project policy</Button>
+        </Stack>
+      </Form>
       <Divider my="lg" />
       <Title order={2}>Structure Definitions</Title>
       <p>

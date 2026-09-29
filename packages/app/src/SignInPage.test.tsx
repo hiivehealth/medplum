@@ -34,19 +34,20 @@ describe('SignInPage', () => {
     });
   });
 
-  function expectSigninPageRendered(): void {
-    expect(screen.getByText('Sign in to Medplum')).toBeInTheDocument();
+  async function expectSigninPageRendered(): Promise<void> {
+    expect(await screen.findByText('Sign in to Medplum')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument();
   }
 
   test('Renders', async () => {
     setup();
 
-    expectSigninPageRendered();
+    await expectSigninPageRendered();
   });
 
   test('Success', async () => {
     setup();
+    await expectSigninPageRendered();
 
     await act(async () => {
       fireEvent.change(screen.getByLabelText('Email *'), { target: { value: 'admin@example.com' } });
@@ -69,6 +70,7 @@ describe('SignInPage', () => {
 
   test('Forgot password', async () => {
     setup();
+    await expectSigninPageRendered();
 
     await act(async () => {
       fireEvent.change(screen.getByLabelText('Email *'), { target: { value: 'admin@example.com' } });
@@ -86,6 +88,7 @@ describe('SignInPage', () => {
   test('Register enabled', async () => {
     getConfig().registerEnabled = true;
     setup();
+    await expectSigninPageRendered();
 
     await act(async () => {
       fireEvent.click(screen.getByText('Register'));
@@ -96,12 +99,13 @@ describe('SignInPage', () => {
     getConfig().registerEnabled = false;
     setup();
 
-    expectSigninPageRendered();
+    await expectSigninPageRendered();
     expect(screen.queryByText('Register')).not.toBeInTheDocument();
   });
 
   test('Redirect to next after login', async () => {
     setup('/signin?next=/batch');
+    await expectSigninPageRendered();
 
     await act(async () => {
       fireEvent.change(screen.getByLabelText('Email *'), { target: { value: 'admin@example.com' } });
@@ -124,6 +128,7 @@ describe('SignInPage', () => {
 
   test('Redirects to homepage after login if bad next', async () => {
     setup('/signin?next=https%3A%2F%2Fevil.com');
+    await expectSigninPageRendered();
 
     await act(async () => {
       fireEvent.change(screen.getByLabelText('Email *'), { target: { value: 'admin@example.com' } });
@@ -148,7 +153,7 @@ describe('SignInPage', () => {
   test('Does NOT automatically redirect to next if logged in and next NOT present', async () => {
     setup('/signin', new MockClient({ profile: DrAliceSmith }));
 
-    expectSigninPageRendered();
+    await expectSigninPageRendered();
   });
 
   test('Automatically redirects to next if logged in and next present', async () => {

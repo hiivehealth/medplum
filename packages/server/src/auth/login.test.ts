@@ -2,20 +2,31 @@
 // SPDX-License-Identifier: Apache-2.0
 import { SendEmailCommand, SESv2Client } from '@aws-sdk/client-sesv2';
 import type { WithId } from '@medplum/core';
-import { createReference, LOINC } from '@medplum/core';
-import type { ClientApplication, Project } from '@medplum/fhirtypes';
+import {
+  createReference,
+  createSystemUseNoticeProjectPolicyExtension,
+  encodeBase64,
+  LOINC,
+  Operator,
+  SYSTEM_USE_NOTICE_DOCUMENT_TYPE_CODE,
+  SYSTEM_USE_NOTICE_DOCUMENT_TYPE_SYSTEM,
+  SYSTEM_USE_NOTICE_PROFILE_URL,
+  SYSTEM_USE_NOTICE_VERSION_IDENTIFIER_SYSTEM,
+} from '@medplum/core';
+import type { AuditEvent, ClientApplication, DocumentReference, Project } from '@medplum/fhirtypes';
 import type { AwsClientStub } from 'aws-sdk-client-mock';
 import { mockClient } from 'aws-sdk-client-mock';
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import express from 'express';
 import { simpleParser } from 'mailparser';
 import request from 'supertest';
 import { vi } from 'vitest';
 import { inviteUser } from '../admin/invite';
 import { initApp, shutdownApp } from '../app';
-import { loadTestConfig } from '../config/loader';
+import { getConfig, loadTestConfig } from '../config/loader';
 import type { Repository } from '../fhir/repo';
 import { getGlobalSystemRepo, getProjectSystemRepo } from '../fhir/repo';
+import { globalLogger } from '../logger';
 import { createTestProject, setupRecaptchaMock, withTestContext } from '../test.setup';
 import { registerNew } from './register';
 import { setPassword } from './setpassword';
@@ -77,6 +88,7 @@ describe('Login', () => {
   });
 
   beforeEach(() => {
+    getConfig().systemUseNotice = { enabledByDefault: false };
     mockSESv2Client.reset();
     mockSESv2Client.on(SendEmailCommand).resolves({ MessageId: 'ID_TEST_123' });
 
@@ -171,6 +183,122 @@ describe('Login', () => {
     });
     expect(res).toHaveStatus(200);
     expect(res.body.code).toBeDefined();
+  });
+
+  test('Requires the active project notice before password authentication and audits its version', async () => {
+    const systemRepo = getGlobalSystemRepo();
+    const projectSystemRepo = await getProjectSystemRepo(project);
+    const version = `usg-system-use-${randomUUID()}`;
+    const body = 'Approved notice text';
+    const notice = await withTestContext(() =>
+      projectSystemRepo.createResource<DocumentReference>({
+        resourceType: 'DocumentReference',
+        meta: { profile: [SYSTEM_USE_NOTICE_PROFILE_URL], project: project.id },
+        masterIdentifier: { system: SYSTEM_USE_NOTICE_VERSION_IDENTIFIER_SYSTEM, value: version },
+        status: 'current',
+        docStatus: 'final',
+        type: {
+          coding: [{ system: SYSTEM_USE_NOTICE_DOCUMENT_TYPE_SYSTEM, code: SYSTEM_USE_NOTICE_DOCUMENT_TYPE_CODE }],
+        },
+        description: 'U.S. Government System Use Acknowledgment',
+        content: [
+          {
+            attachment: {
+              contentType: 'text/plain',
+              language: 'en-US',
+              data: encodeBase64(body),
+              hash: createHash('sha1').update(body).digest('base64'),
+            },
+          },
+        ],
+      })
+    );
+    const currentProject = await systemRepo.readResource<Project>('Project', project.id);
+    await withTestContext(() =>
+      projectSystemRepo.updateResource<Project>({
+        ...currentProject,
+        extension: [
+          ...(currentProject.extension ?? []),
+          createSystemUseNoticeProjectPolicyExtension({
+            enabled: true,
+            activeNotice: createReference(notice),
+          }),
+        ],
+      })
+    );
+
+    const previousLogAuditEvents = getConfig().logAuditEvents;
+    const previousSaveAuditEvents = getConfig().saveAuditEvents;
+    const logSpy = vi.spyOn(globalLogger, 'write' as any).mockImplementation(() => undefined);
+    getConfig().logAuditEvents = true;
+    getConfig().saveAuditEvents = true;
+    try {
+      const discovery = await request(app).get('/auth/system-use-notice').query({ clientId: client.id });
+      expect(discovery).toHaveStatus(200);
+      expect(discovery.body).toStrictEqual({
+        enabled: true,
+        version,
+        title: 'U.S. Government System Use Acknowledgment',
+        body,
+        actionLabel: 'OK',
+      });
+
+      const missing = await request(app).post('/auth/login').type('json').send({
+        clientId: client.id,
+        email,
+        password: 'wrong-password',
+        scope: 'openid',
+      });
+      expect(missing).toHaveStatus(400);
+      expect(missing.body.issue[0].details.text).toBe('Invalid login request');
+
+      const stale = await request(app).post('/auth/login').type('json').send({
+        clientId: client.id,
+        email,
+        password,
+        scope: 'openid',
+        systemUseNoticeVersion: 'unknown-version',
+      });
+      expect(stale).toHaveStatus(400);
+      expect(stale.body.issue[0].details.text).toBe('Invalid login request');
+
+      const accepted = await request(app).post('/auth/login').type('json').send({
+        clientId: client.id,
+        email,
+        password,
+        scope: 'openid',
+        systemUseNoticeVersion: version,
+      });
+      expect(accepted).toHaveStatus(200);
+      const audit = logSpy.mock.calls
+        .map((call) => JSON.parse(call[0] as string))
+        .find((event) => event.subtype?.[0]?.code === '110122');
+      expect(audit.extension).toContainEqual({
+        url: 'https://ehr.hiivehealth.net/fhir/StructureDefinition/system-use-notice-version',
+        valueString: version,
+      });
+
+      const saved = await withTestContext(() =>
+        projectSystemRepo.searchResources<AuditEvent>({
+          resourceType: 'AuditEvent',
+          filters: [{ code: 'subtype', operator: Operator.EQUALS, value: '110122' }],
+        })
+      );
+      expect(saved.some((event) => event.extension?.some((item) => item.valueString === version))).toBe(true);
+    } finally {
+      getConfig().logAuditEvents = previousLogAuditEvents;
+      getConfig().saveAuditEvents = previousSaveAuditEvents;
+      logSpy.mockRestore();
+      const updatedProject = await systemRepo.readResource<Project>('Project', project.id);
+      await withTestContext(() =>
+        projectSystemRepo.updateResource<Project>({
+          ...updatedProject,
+          extension: updatedProject.extension?.filter(
+            (item) => item.url !== 'https://ehr.hiivehealth.net/fhir/StructureDefinition/system-use-notice-policy'
+          ),
+        })
+      );
+    }
   });
 
   test('Success default client', async () => {

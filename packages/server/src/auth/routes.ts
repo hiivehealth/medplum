@@ -21,12 +21,14 @@ import { revokeHandler, revokeValidator } from './revoke';
 import { scopeHandler, scopeValidator } from './scope';
 import { setPasswordHandler, setPasswordValidator } from './setpassword';
 import { statusHandler, statusValidator } from './status';
+import { systemUseNoticeHandler, systemUseNoticeValidator } from './system-use-notice';
 import { projectRegistrationAllowed, validateRecaptcha } from './utils';
 import { verifyEmailHandler, verifyEmailValidator } from './verifyemail';
 
 export const authRouter = Router();
 authRouter.use('/mfa', mfaRouter);
 authRouter.post('/method', methodValidator, methodHandler);
+authRouter.get('/system-use-notice', systemUseNoticeValidator, systemUseNoticeHandler);
 authRouter.get('/external', externalCallbackHandler);
 authRouter.get('/me', authenticateRequest, meHandler);
 authRouter.post('/newuser', newUserValidator, validateRecaptcha(projectRegistrationAllowed), newUserHandler);

@@ -12,6 +12,7 @@ describe('utils', () => {
     expect(isBooleanConfig('logRequests')).toBe(true);
     expect(isBooleanConfig('rateLimitsEnabled')).toBe(true);
     expect(isBooleanConfig('requireVerifiedEmailForProjectCreation')).toBe(true);
+    expect(isBooleanConfig('systemUseNotice.enabledByDefault')).toBe(true);
   });
 
   test('isIntegerConfig', () => {
@@ -31,6 +32,12 @@ describe('utils', () => {
       baseUrl: 'https://example.com',
     } as any);
     expect(config.rateLimitsEnabled).toBe(true);
+  });
+
+  test('addDefaults fails closed for missing Project notice policies', () => {
+    const config = addDefaults({ baseUrl: 'https://example.com' } as any);
+    expect(config.systemUseNotice).toStrictEqual({ enabledByDefault: true });
+    expect(isObjectConfig('systemUseNotice')).toBe(true);
   });
 
   test('addDefaults preserves existing maxSearchOffset', () => {

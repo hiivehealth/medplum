@@ -18,6 +18,7 @@ import { sendLoginResult } from './utils';
 export const profileValidator = makeValidationMiddleware([
   body('login').exists().withMessage('Missing login'),
   body('profile').exists().withMessage('Missing profile'),
+  body('systemUseNoticeVersion').optional().isString().withMessage('Invalid system use notice version'),
 ]);
 
 export async function profileHandler(req: Request, res: Response): Promise<void> {
@@ -33,7 +34,11 @@ export async function profileHandler(req: Request, res: Response): Promise<void>
   }
 
   // Update the login
-  const updated = await setLoginMembership(login, membership);
+  const updated = await setLoginMembership(
+    login,
+    membership,
+    typeof req.body.systemUseNoticeVersion === 'string' ? req.body.systemUseNoticeVersion : undefined
+  );
 
   // Send login result
   await sendLoginResult(res, updated);

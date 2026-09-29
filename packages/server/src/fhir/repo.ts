@@ -39,6 +39,8 @@ import {
   satisfiedAccessPolicy,
   sleep,
   stringify,
+  SYSTEM_USE_NOTICE_POLICY_URL,
+  isSystemUseNotice,
   toTypedValue,
   validateResourceType,
 } from '@medplum/core';
@@ -1000,6 +1002,7 @@ export class Repository extends FhirRepository implements Disposable {
     }
 
     const existing = create ? undefined : await this.checkExistingResource<T>(resourceType, id);
+    assertSystemUseNoticeWriteAllowed(this, existing, validatedResource);
     if (existing) {
       (existing.meta as Meta).compartment = this.getCompartments(existing); // Update compartments with latest rules
       if (!this.canPerformInteraction(interaction, existing)) {
@@ -1369,6 +1372,9 @@ export class Repository extends FhirRepository implements Disposable {
       if (!this.canPerformInteraction(AccessPolicyInteraction.DELETE, resource)) {
         throw new OperationOutcomeError(forbidden);
       }
+      if (isFinalSystemUseNotice(resource)) {
+        throw new OperationOutcomeError(forbidden);
+      }
 
       await preCommitValidation(this, resource, 'delete');
 
@@ -1546,6 +1552,19 @@ export class Repository extends FhirRepository implements Disposable {
     const projectId = this.isSuperAdmin() ? undefined : this.currentProject()?.id;
     const deletedIds = await this.withTransaction<string[]>(
       async (txRepo) => {
+        if (resourceType === 'DocumentReference') {
+          const rows = await txRepo.sqlRead<{ content: string }>(
+            new SelectQuery(resourceType).column('content').where('id', 'IN', ids),
+            resourceType,
+            { mode: DatabaseMode.WRITER, source: 'repo.expungeResources.systemUseNotice' }
+          );
+          for (const row of rows) {
+            if (isFinalSystemUseNotice(JSON.parse(row.content) as Resource)) {
+              throw new OperationOutcomeError(forbidden);
+            }
+          }
+        }
+
         const deleteQuery = new DeleteQuery(resourceType).where('id', 'IN', ids).returning('id');
         if (projectId) {
           deleteQuery.where('projectId', '=', projectId);
@@ -2729,6 +2748,33 @@ function asSystemRepository(repo: Repository): SystemRepository {
   }
 
   return repo as SystemRepository;
+}
+
+function isFinalSystemUseNotice(resource: Resource | undefined): boolean {
+  return resource?.resourceType === 'DocumentReference' && resource.docStatus === 'final' && isSystemUseNotice(resource);
+}
+
+function getSystemUseNoticePolicyExtension(resource: Resource | undefined): unknown {
+  if (resource?.resourceType !== 'Project') {
+    return undefined;
+  }
+  return resource.extension?.find((extension) => extension.url === SYSTEM_USE_NOTICE_POLICY_URL);
+}
+
+function assertSystemUseNoticeWriteAllowed(repo: Repository, existing: Resource | undefined, proposed: Resource): void {
+  if (isFinalSystemUseNotice(existing)) {
+    throw new OperationOutcomeError(forbidden);
+  }
+  if (isSystemUseNotice(proposed) && !repo.isSuperAdmin()) {
+    throw new OperationOutcomeError(forbidden);
+  }
+  if (
+    proposed.resourceType === 'Project' &&
+    !repo.isSuperAdmin() &&
+    !deepEquals(getSystemUseNoticePolicyExtension(existing), getSystemUseNoticePolicyExtension(proposed))
+  ) {
+    throw new OperationOutcomeError(forbidden);
+  }
 }
 
 /*

@@ -15,6 +15,11 @@
   "defaultBotRuntimeVersion": "vmcontext",
   "allowedOrigins": "*",
   "introspectionEnabled": true,
+  "logAuditEvents": true,
+  "saveAuditEvents": true,
+  "systemUseNotice": {
+    "enabledByDefault": false
+  },
   "rateLimitsEnabled": false,
   "database": {
     "host": "localhost",

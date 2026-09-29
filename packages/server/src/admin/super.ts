@@ -44,6 +44,7 @@ import { addLambdaCleanerJobData } from '../workers/lambda-cleaner';
 import { addPostDeployMigrationJobData, prepareDynamicMigrationJobData } from '../workers/post-deploy-migration';
 import type { ReindexJobOptions } from '../workers/reindex';
 import { addReindexJob } from '../workers/reindex';
+import { systemUseNoticeAdminRouter } from './system-use-notice';
 
 export const OVERRIDABLE_TABLE_SETTINGS = {
   autovacuum_vacuum_scale_factor: 'float',
@@ -56,6 +57,7 @@ export const OVERRIDABLE_TABLE_SETTINGS = {
 
 export const superAdminRouter = Router();
 superAdminRouter.use(authenticateRequest);
+superAdminRouter.use('/system-use-notices', systemUseNoticeAdminRouter);
 
 // POST to /admin/super/valuesets
 // to rebuild the terminology tables.

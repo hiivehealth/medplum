@@ -510,10 +510,34 @@ describe('Client', () => {
   test('Sign in direct', async () => {
     const fetch = mockFetch(200, { login: '123', code: 'abc' });
     const client = new MedplumClient({ fetch });
-    const result1 = await client.startLogin({ email: 'admin@example.com', password: 'admin' });
+    const result1 = await client.startLogin({
+      email: 'admin@example.com',
+      password: 'admin',
+      systemUseNoticeVersion: 'usg-system-use-2026-09-10',
+    });
     expect(result1).toBeDefined();
     expect(result1.login).toBeDefined();
     expect(result1.code).toBeDefined();
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toMatchObject({
+      email: 'admin@example.com',
+      systemUseNoticeVersion: 'usg-system-use-2026-09-10',
+    });
+  });
+
+  test('Get system use notice', async () => {
+    const fetch = mockFetch(200, {
+      enabled: true,
+      version: 'usg-system-use-2026-09-10',
+      title: 'Notice',
+      body: 'Body',
+      actionLabel: 'OK',
+    });
+    const client = new MedplumClient({ fetch });
+
+    const result = await client.getSystemUseNotice({ clientId: 'client-1', projectId: 'project-1' });
+
+    expect(result.enabled).toBe(true);
+    expect(fetch.mock.calls[0][0]).toContain('auth/system-use-notice?clientId=client-1&projectId=project-1');
   });
 
   test('Sign in with Google', async () => {
