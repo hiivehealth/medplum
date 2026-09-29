@@ -95,7 +95,10 @@ systemUseNoticeAdminRouter.post(
       ],
     };
     await readAndValidateSystemUseNotice(systemRepo, notice, false);
-    res.status(201).json(await systemRepo.createResource(notice));
+    const created = await commitUniqueNoticeVersion(systemRepo, version, undefined, (txRepo) =>
+      txRepo.createResource(notice)
+    );
+    res.status(201).json(created);
   }
 );
 
@@ -107,8 +110,11 @@ systemUseNoticeAdminRouter.post('/projects/:projectId/notices/:id/publish', asyn
     throw new OperationOutcomeError(badRequest('Notice is not publishable'));
   }
   validateSystemUseNotice(notice, false);
-  await assertVersionUnique(systemRepo, notice.masterIdentifier?.value as string, notice.id);
-  res.status(200).json(await systemRepo.updateResource({ ...notice, docStatus: 'final' }));
+  const version = notice.masterIdentifier?.value as string;
+  const published = await commitUniqueNoticeVersion(systemRepo, version, notice.id, (txRepo) =>
+    txRepo.updateResource({ ...notice, docStatus: 'final' })
+  );
+  res.status(200).json(published);
 });
 
 systemUseNoticeAdminRouter.post('/projects/:projectId/policy', async (req: Request, res: Response) => {
@@ -139,6 +145,25 @@ systemUseNoticeAdminRouter.post('/projects/:projectId/policy', async (req: Reque
   extension.push(policy);
   res.status(200).json(await getGlobalSystemRepo().updateResource({ ...project, extension }));
 });
+
+/**
+ * Checks the version and writes the notice in one serializable transaction.
+ * A concurrent create sees the other write or is retried, so the same version cannot identify two notices.
+ */
+async function commitUniqueNoticeVersion<T>(
+  repo: Repository,
+  version: string,
+  excludeId: string | undefined,
+  write: (repo: Repository) => Promise<T>
+): Promise<T> {
+  return repo.withTransaction(
+    async (txRepo) => {
+      await assertVersionUnique(txRepo, version, excludeId);
+      return write(txRepo);
+    },
+    { serializable: true, resourceTypes: 'DocumentReference', source: 'admin.systemUseNotice.version' }
+  );
+}
 
 async function assertVersionUnique(repo: Repository, version: string, excludeId?: string): Promise<void> {
   const matches = await repo.searchResources<DocumentReference>({

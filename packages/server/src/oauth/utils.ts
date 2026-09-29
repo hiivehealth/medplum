@@ -442,12 +442,14 @@ export function getClientApplicationMembership(
  * @param login - The login before the membership is set.
  * @param membership - The membership to set.
  * @param systemUseNoticeVersion - notice version before login.
+ * @param options - When `enforceSystemUseNotice` is false, skip the acknowledgement check. Registration does not present the notice.
  * @returns The updated login.
  */
 export async function setLoginMembership(
   login: WithId<Login>,
   membership: WithId<ProjectMembership>,
-  systemUseNoticeVersion?: string
+  systemUseNoticeVersion?: string,
+  options?: { readonly enforceSystemUseNotice?: boolean }
 ): Promise<WithId<Login>> {
   if (login.revoked) {
     throw new OperationOutcomeError(badRequest('Login revoked'));
@@ -508,7 +510,7 @@ export async function setLoginMembership(
 
   const submittedNoticeVersion = systemUseNoticeVersion ?? (await readSystemUseNoticeVersion(login.id));
   let recordedNoticeVersion = submittedNoticeVersion;
-  if (login.authMethod === 'password') {
+  if (options?.enforceSystemUseNotice !== false && login.authMethod === 'password') {
     try {
       recordedNoticeVersion = assertSystemUseNoticeAcknowledged(
         await resolveSystemUseNotice(project.id),

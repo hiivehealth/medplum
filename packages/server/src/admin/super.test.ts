@@ -333,6 +333,18 @@ describe('Super Admin routes', () => {
       .set('Authorization', 'Bearer ' + adminAccessToken);
     expect(deleteRes).toHaveStatus(403);
 
+    const expungeRes = await request(app)
+      .post(`/fhir/R4/DocumentReference/${createRes.body.id}/$expunge`)
+      .set('Authorization', 'Bearer ' + adminAccessToken)
+      .type('json')
+      .send({});
+    expect(expungeRes).toHaveStatus(403);
+
+    const stillThere = await request(app)
+      .get(`/fhir/R4/DocumentReference/${createRes.body.id}`)
+      .set('Authorization', 'Bearer ' + adminAccessToken);
+    expect(stillThere).toHaveStatus(200);
+
     const activateRes = await request(app)
       .post(`/admin/super/system-use-notices/projects/${project.id}/policy`)
       .set('Authorization', 'Bearer ' + adminAccessToken)

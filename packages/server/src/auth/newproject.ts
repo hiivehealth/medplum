@@ -72,7 +72,7 @@ export async function newProjectHandler(req: Request, res: Response): Promise<vo
 
   const projectName = req.body.projectName;
   const { project, membership } = await createProject(projectName, user);
-  const updatedLogin = await setLoginMembership(login, membership);
+  const updatedLogin = await setLoginMembership(login, membership, undefined, { enforceSystemUseNotice: false });
 
   // Send a welcome email, but only for the user's first project. This is
   // best-effort: any failure is logged inside sendWelcomeEmail and never blocks

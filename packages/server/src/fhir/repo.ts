@@ -1552,6 +1552,19 @@ export class Repository extends FhirRepository implements Disposable {
     const projectId = this.isSuperAdmin() ? undefined : this.currentProject()?.id;
     const deletedIds = await this.withTransaction<string[]>(
       async (txRepo) => {
+        if (resourceType === 'DocumentReference') {
+          const rows = await txRepo.sqlRead<{ content: string }>(
+            new SelectQuery(resourceType).column('content').where('id', 'IN', ids),
+            resourceType,
+            { mode: DatabaseMode.WRITER, source: 'repo.expungeResources.systemUseNotice' }
+          );
+          for (const row of rows) {
+            if (isFinalSystemUseNotice(JSON.parse(row.content) as Resource)) {
+              throw new OperationOutcomeError(forbidden);
+            }
+          }
+        }
+
         const deleteQuery = new DeleteQuery(resourceType).where('id', 'IN', ids).returning('id');
         if (projectId) {
           deleteQuery.where('projectId', '=', projectId);
