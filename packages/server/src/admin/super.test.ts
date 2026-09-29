@@ -313,6 +313,15 @@ describe('Super Admin routes', () => {
       .send({ version, title: 'Duplicate', body: 'Duplicate body' });
     expect(duplicate).toHaveStatus(400);
 
+    const otherProject = await createTestProject();
+    const wrongProject = await request(app)
+      .post(`/admin/super/system-use-notices/projects/${otherProject.project.id}/notices/${createRes.body.id}/publish`)
+      .set('Authorization', 'Bearer ' + adminAccessToken)
+      .type('json')
+      .send({});
+    expect(wrongProject).toHaveStatus(400);
+    expect(wrongProject.body.issue[0].details.text).toBe('Notice is not publishable');
+
     const publishRes = await request(app)
       .post(`/admin/super/system-use-notices/projects/${project.id}/notices/${createRes.body.id}/publish`)
       .set('Authorization', 'Bearer ' + adminAccessToken)

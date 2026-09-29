@@ -106,7 +106,11 @@ systemUseNoticeAdminRouter.post('/projects/:projectId/notices/:id/publish', asyn
   assertOnlyKeys(req.body, []);
   const systemRepo = await getAdminProjectRepo(req.params.projectId as string);
   const notice = await systemRepo.readResource<DocumentReference>('DocumentReference', req.params.id as string);
-  if (!isSystemUseNotice(notice) || notice.docStatus !== 'preliminary') {
+  if (
+    !isSystemUseNotice(notice) ||
+    notice.docStatus !== 'preliminary' ||
+    notice.meta?.project !== req.params.projectId
+  ) {
     throw new OperationOutcomeError(badRequest('Notice is not publishable'));
   }
   validateSystemUseNotice(notice, false);

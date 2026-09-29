@@ -33,6 +33,8 @@ export async function loginHandler(req: Request, res: Response): Promise<void> {
   // The only rule is that they have to match
   const clientId = req.body.clientId;
   const projectId = await getProjectIdByClientId(req.body.clientId, req.body.projectId as string | undefined);
+  // A request without a project acknowledges the server fallback notice.
+  // Choosing a membership re-checks that project's notice in profileHandler.
   let systemUseNoticeVersion: string | undefined;
   try {
     const notice = await resolveSystemUseNotice(projectId);

@@ -10,6 +10,8 @@ import { act, fireEvent, render, screen, waitFor } from '../test-utils/render';
 import type { SignInFormProps } from './SignInForm';
 import { SignInForm } from './SignInForm';
 
+let lastProfileRequest: { login?: string; profile?: string; systemUseNoticeVersion?: string } | undefined;
+
 function mockFetch(url: string, options: any): Promise<any> {
   let status = 404;
   let result: any;
@@ -22,6 +24,14 @@ function mockFetch(url: string, options: any): Promise<any> {
         version: 'usg-system-use-2026-09-10',
         title: 'U.S. Government System Use Acknowledgment',
         body: 'Approved notice text',
+        actionLabel: 'OK',
+      };
+    } else if (url.includes('projectId=project-b')) {
+      result = {
+        enabled: true,
+        version: 'project-b-version',
+        title: 'Project B notice',
+        body: 'Project B notice text',
         actionLabel: 'OK',
       };
     } else {
@@ -77,6 +87,23 @@ function mockFetch(url: string, options: any): Promise<any> {
               reference: 'Project/2',
               display: 'Project 2',
             },
+          },
+        ],
+      };
+    } else if (email === 'notice-profile@medplum.com' && password === 'admin') {
+      status = 200;
+      result = {
+        login: '3',
+        memberships: [
+          {
+            id: '200',
+            profile: { reference: 'Practitioner/300', display: 'Cara Notice' },
+            project: { reference: 'Project/project-b', display: 'Project B' },
+          },
+          {
+            id: '201',
+            profile: { reference: 'Practitioner/301', display: 'Dan Other' },
+            project: { reference: 'Project/2', display: 'Project 2' },
           },
         ],
       };
@@ -149,7 +176,9 @@ function mockFetch(url: string, options: any): Promise<any> {
       code: '1',
     };
   } else if (options.method === 'POST' && url.endsWith('auth/profile')) {
-    const { profile } = JSON.parse(options.body);
+    const body = JSON.parse(options.body);
+    lastProfileRequest = body;
+    const { profile } = body;
     if (profile === '101') {
       status = 400;
       result = badRequest('Invalid IP address');
@@ -483,6 +512,55 @@ describe('SignInForm', () => {
     expect(await screen.findByText('Invalid IP address')).toBeInTheDocument();
 
     expect(success).toBe(false);
+  });
+
+  test('Acknowledges the selected project notice before choosing a profile', async () => {
+    lastProfileRequest = undefined;
+    let success = false;
+
+    await setup({
+      onSuccess: () => (success = true),
+    });
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Email', { exact: false }), {
+        target: { value: 'notice-profile@medplum.com' },
+      });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Continue'));
+    });
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Password', { exact: false, selector: 'input' }), {
+        target: { value: 'admin' },
+      });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Sign In'));
+    });
+
+    expect(await screen.findByText('Choose a Project')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Cara Notice'));
+    });
+
+    expect(await screen.findByText('Project B notice text')).toBeInTheDocument();
+    expect(lastProfileRequest).toBeUndefined();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    });
+
+    await waitFor(() => expect(success).toBe(true));
+    expect(lastProfileRequest).toMatchObject({
+      login: '3',
+      profile: '200',
+      systemUseNoticeVersion: 'project-b-version',
+    });
   });
 
   test('Choose scope', async () => {

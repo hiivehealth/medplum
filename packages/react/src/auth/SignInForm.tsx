@@ -70,6 +70,8 @@ export function SignInForm(props: SignInFormProps): JSX.Element {
   const [noticeVersion, setNoticeVersion] = useState<string>();
   const [noticeError, setNoticeError] = useState(false);
   const [noticeRequest, setNoticeRequest] = useState(0);
+  const [pendingMembership, setPendingMembership] = useState<ProjectMembership>();
+  const [profileNotice, setProfileNotice] = useState<SystemUseNoticeResponse>();
 
   useEffect(() => {
     if (loginCode || login) {
@@ -178,6 +180,42 @@ export function SignInForm(props: SignInFormProps): JSX.Element {
     [handleCode]
   );
 
+  const submitProfile = useCallback(
+    (membership: ProjectMembership, version: string | undefined): Promise<void> => {
+      return medplum
+        .post<LoginAuthenticationResponse>('auth/profile', {
+          login,
+          profile: membership.id,
+          ...(version ? { systemUseNoticeVersion: version } : {}),
+        })
+        .then((response) => {
+          if (version) {
+            setNoticeVersion(version);
+          }
+          setPendingMembership(undefined);
+          setProfileNotice(undefined);
+          handleAuthResponse(response);
+        });
+    },
+    [handleAuthResponse, login, medplum]
+  );
+
+  const handleProfileSelect = useCallback(
+    async (membership: ProjectMembership): Promise<void> => {
+      const projectId = membership.project?.reference?.startsWith('Project/')
+        ? membership.project.reference.slice('Project/'.length)
+        : undefined;
+      const projectNotice = await medplum.getSystemUseNotice({ clientId: props.clientId, projectId });
+      if (projectNotice.enabled && projectNotice.version !== noticeVersion) {
+        setPendingMembership(membership);
+        setProfileNotice(projectNotice);
+        return;
+      }
+      await submitProfile(membership, projectNotice.enabled ? projectNotice.version : undefined);
+    },
+    [medplum, noticeVersion, props.clientId, submitProfile]
+  );
+
   useEffect(() => {
     // Beware the race condition here
     // The `useMedplum` hook will return a new instance of the MedplumClient on login
@@ -277,8 +315,40 @@ export function SignInForm(props: SignInFormProps): JSX.Element {
           );
         } else if (props.projectId === 'new') {
           return <NewProjectForm login={login} handleAuthResponse={handleAuthResponse} />;
+        } else if (pendingMembership && profileNotice?.enabled && noticeVersion !== profileNotice.version) {
+          return (
+            <Modal
+              opened
+              onClose={() => undefined}
+              withCloseButton={false}
+              closeOnClickOutside={false}
+              closeOnEscape={false}
+              title={profileNotice.title}
+              actions={
+                <Button
+                  fullWidth
+                  onClick={() => {
+                    submitProfile(pendingMembership, profileNotice.version).catch((err: unknown) =>
+                      showNotification({ color: 'red', message: normalizeErrorString(err) })
+                    );
+                  }}
+                >
+                  {profileNotice.actionLabel}
+                </Button>
+              }
+            >
+              <Text style={{ whiteSpace: 'pre-wrap' }}>{profileNotice.body}</Text>
+            </Modal>
+          );
         } else if (memberships) {
-          return <ChooseProfileForm login={login} memberships={memberships} handleAuthResponse={handleAuthResponse} />;
+          return (
+            <ChooseProfileForm
+              login={login}
+              memberships={memberships}
+              handleAuthResponse={handleAuthResponse}
+              onSelectMembership={handleProfileSelect}
+            />
+          );
         } else if (props.chooseScopes) {
           return (
             <ChooseScopeForm
