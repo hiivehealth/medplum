@@ -43,6 +43,6 @@ describe('System use notice', () => {
       } as Resource)
     ).toBe(false);
     expect(isSystemUseNotice({ resourceType: 'DocumentReference' } as Resource)).toBe(false);
-    expect(isSystemUseNotice({ resourceType: 'Patient' } as Resource)).toBe(false);
+    expect(isSystemUseNotice({ resourceType: 'Patient' })).toBe(false);
   });
 });

@@ -297,9 +297,12 @@ describe('Super Admin routes', () => {
   });
 
   test('Publishes immutable versioned system use notices and activates one for a project', async () => {
+    // Use a dedicated project. The shared super admin project is reused by other tests, and an
+    // enabled notice there would reject their password logins.
+    const noticeProject = await createTestProject();
     const version = `usg-system-use-${randomUUID()}`;
     const createRes = await request(app)
-      .post(`/admin/super/system-use-notices/projects/${project.id}/notices`)
+      .post(`/admin/super/system-use-notices/projects/${noticeProject.project.id}/notices`)
       .set('Authorization', 'Bearer ' + adminAccessToken)
       .type('json')
       .send({ version, title: 'Government System Use Notice', body: 'Approved notice body' });
@@ -307,7 +310,7 @@ describe('Super Admin routes', () => {
     expect(createRes.body.docStatus).toBe('preliminary');
 
     const duplicate = await request(app)
-      .post(`/admin/super/system-use-notices/projects/${project.id}/notices`)
+      .post(`/admin/super/system-use-notices/projects/${noticeProject.project.id}/notices`)
       .set('Authorization', 'Bearer ' + adminAccessToken)
       .type('json')
       .send({ version, title: 'Duplicate', body: 'Duplicate body' });
@@ -323,7 +326,7 @@ describe('Super Admin routes', () => {
     expect(wrongProject.body.issue[0].details.text).toBe('Notice is not publishable');
 
     const publishRes = await request(app)
-      .post(`/admin/super/system-use-notices/projects/${project.id}/notices/${createRes.body.id}/publish`)
+      .post(`/admin/super/system-use-notices/projects/${noticeProject.project.id}/notices/${createRes.body.id}/publish`)
       .set('Authorization', 'Bearer ' + adminAccessToken)
       .type('json')
       .send({});
@@ -355,7 +358,7 @@ describe('Super Admin routes', () => {
     expect(stillThere).toHaveStatus(200);
 
     const activateRes = await request(app)
-      .post(`/admin/super/system-use-notices/projects/${project.id}/policy`)
+      .post(`/admin/super/system-use-notices/projects/${noticeProject.project.id}/policy`)
       .set('Authorization', 'Bearer ' + adminAccessToken)
       .type('json')
       .send({ enabled: true, activeNotice: `DocumentReference/${createRes.body.id}` });
@@ -363,7 +366,7 @@ describe('Super Admin routes', () => {
     expect(JSON.stringify(activateRes.body.extension)).toContain(`DocumentReference/${createRes.body.id}`);
 
     const denied = await request(app)
-      .post(`/admin/super/system-use-notices/projects/${project.id}/notices`)
+      .post(`/admin/super/system-use-notices/projects/${noticeProject.project.id}/notices`)
       .set('Authorization', 'Bearer ' + nonAdminAccessToken)
       .type('json')
       .send({

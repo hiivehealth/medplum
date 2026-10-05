@@ -279,7 +279,7 @@ describe('Login', () => {
       });
 
       const saved = await withTestContext(() =>
-        projectSystemRepo.searchResources<AuditEvent>({
+        repo.searchResources<AuditEvent>({
           resourceType: 'AuditEvent',
           filters: [{ code: 'subtype', operator: Operator.EQUALS, value: '110122' }],
         })

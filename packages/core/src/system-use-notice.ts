@@ -66,7 +66,11 @@ export function createSystemUseNoticeProjectPolicyExtension(policy: SystemUseNot
   return { url: SYSTEM_USE_NOTICE_POLICY_URL, extension };
 }
 
-/** True when the resource is a profiled Hiive system use notice DocumentReference. */
+/**
+ * Returns true when the resource is a profiled Hiive system use notice DocumentReference.
+ * @param resource - Resource to test. Undefined is not a notice.
+ * @returns True when the resource is a system use notice.
+ */
 export function isSystemUseNotice(resource: Resource | undefined): resource is DocumentReference {
   return (
     resource?.resourceType === 'DocumentReference' &&

@@ -29,15 +29,15 @@ describe('SignInPage', () => {
     vi.unstubAllEnvs();
   });
 
-  function expectSigninPageRendered(): void {
-    expect(screen.getByText('Sign in to Provider')).toBeInTheDocument();
+  async function expectSigninPageRendered(): Promise<void> {
+    expect(await screen.findByText('Sign in to Provider')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument();
   }
 
   test('Renders', async () => {
     setup();
 
-    expectSigninPageRendered();
+    await expectSigninPageRendered();
   });
 
   test('Shows register link when registration is enabled', async () => {
@@ -45,12 +45,14 @@ describe('SignInPage', () => {
 
     setup();
 
+    await expectSigninPageRendered();
     expect(screen.getByText('Register')).toBeInTheDocument();
   });
 
   test('Hides register link when registration is disabled by default', async () => {
     setup();
 
+    await expectSigninPageRendered();
     expect(screen.queryByText('Register')).not.toBeInTheDocument();
   });
 
@@ -58,6 +60,7 @@ describe('SignInPage', () => {
     vi.stubEnv('MEDPLUM_REGISTER_ENABLED', 'false');
     setup();
 
+    await expectSigninPageRendered();
     expect(screen.queryByText('Register')).not.toBeInTheDocument();
   });
 
@@ -70,7 +73,7 @@ describe('SignInPage', () => {
     });
 
     await act(async () => {
-      fireEvent.change(screen.getByLabelText('Email *'), { target: { value: 'admin@example.com' } });
+      fireEvent.change(await screen.findByLabelText('Email *'), { target: { value: 'admin@example.com' } });
     });
 
     await act(async () => {
