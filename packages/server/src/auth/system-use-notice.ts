@@ -1,5 +1,6 @@
 // SPDX-FileCopyrightText: Copyright Orangebot, Inc. and Medplum contributors
 // SPDX-License-Identifier: Apache-2.0
+import type { WithId } from '@medplum/core';
 import {
   badRequest,
   decodeBase64,
@@ -12,7 +13,6 @@ import {
   SYSTEM_USE_NOTICE_DOCUMENT_TYPE_SYSTEM,
   SYSTEM_USE_NOTICE_VERSION_IDENTIFIER_SYSTEM,
 } from '@medplum/core';
-import type { WithId } from '@medplum/core';
 import type { Binary, DocumentReference, Project, Reference } from '@medplum/fhirtypes';
 import type { Request, Response } from 'express';
 import { query } from 'express-validator';
@@ -38,7 +38,7 @@ export interface ResolvedSystemUseNotice {
 }
 
 export const systemUseNoticeValidator = makeValidationMiddleware([
-  query('clientId').optional().isUUID().withMessage('Invalid clientId'),
+  query('clientId').optional().isString().trim().notEmpty().withMessage('Invalid clientId'),
   query('projectId')
     .optional()
     .custom((value) => value === 'new' || isUUID(value))
@@ -48,6 +48,8 @@ export const systemUseNoticeValidator = makeValidationMiddleware([
 /**
  * Public policy-discovery endpoint. It exposes only approved login-banner
  * content and never accepts an email address or other user identifier.
+ * @param req - Incoming request. `clientId` is an optional non-empty string resolved by `getProjectIdByClientId`.
+ * @param res - Response carrying the effective notice or `{ enabled: false }`.
  */
 export async function systemUseNoticeHandler(req: Request, res: Response): Promise<void> {
   if (Object.keys(req.query).some((key) => key !== 'clientId' && key !== 'projectId')) {
@@ -74,6 +76,8 @@ export async function systemUseNoticeHandler(req: Request, res: Response): Promi
 /**
  * Resolves and validates the effective project policy.
  * Explicit Project configuration wins over the server fallback.
+ * @param projectId - Project to resolve, or undefined to use the server fallback.
+ * @returns The effective notice, or a disabled result when no notice applies.
  */
 export async function resolveSystemUseNotice(projectId: string | undefined): Promise<ResolvedSystemUseNotice> {
   const systemRepo = getGlobalSystemRepo();
@@ -136,6 +140,9 @@ export async function validateDefaultSystemUseNotice(): Promise<void> {
 
 /**
  * Validates the password-login acknowledgement before user lookup or bcrypt.
+ * @param notice - Effective notice for the login.
+ * @param submittedVersion - Version submitted by the client.
+ * @returns The accepted version, or undefined when the notice is disabled.
  */
 export function assertSystemUseNoticeAcknowledged(
   notice: ResolvedSystemUseNotice,
@@ -144,10 +151,7 @@ export function assertSystemUseNoticeAcknowledged(
   if (!notice.enabled) {
     return undefined;
   }
-  if (
-    typeof submittedVersion !== 'string' ||
-    submittedVersion !== notice.version
-  ) {
+  if (typeof submittedVersion !== 'string' || submittedVersion !== notice.version) {
     throw new OperationOutcomeError(badRequest(GENERIC_LOGIN_ERROR));
   }
   return submittedVersion;
@@ -155,6 +159,9 @@ export function assertSystemUseNoticeAcknowledged(
 
 /**
  * Validates and decodes a profiled notice resource.
+ * @param notice - DocumentReference to validate.
+ * @param requireFinal - When true, a preliminary notice is rejected.
+ * @returns The version, title, and body of an approved notice.
  */
 export function validateSystemUseNotice(
   notice: DocumentReference,
@@ -206,6 +213,10 @@ export function validateSystemUseNotice(
 /**
  * Resolves a repository-managed Binary attachment before validating its
  * hash and UTF-8 notice text.
+ * @param repo - Repository used to read a Binary attachment.
+ * @param notice - DocumentReference to validate.
+ * @param requireFinal - When true, a preliminary notice is rejected.
+ * @returns The version, title, and body of an approved notice.
  */
 export async function readAndValidateSystemUseNotice(
   repo: Repository,

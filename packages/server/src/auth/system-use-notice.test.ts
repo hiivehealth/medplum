@@ -8,13 +8,29 @@ import {
   SYSTEM_USE_NOTICE_VERSION_IDENTIFIER_SYSTEM,
 } from '@medplum/core';
 import type { DocumentReference } from '@medplum/fhirtypes';
+import type { Request, Response } from 'express';
 import { createHash } from 'node:crypto';
 import type { Repository } from '../fhir/repo';
 import {
   assertSystemUseNoticeAcknowledged,
   readAndValidateSystemUseNotice,
+  systemUseNoticeValidator,
   validateSystemUseNotice,
 } from './system-use-notice';
+
+function runNoticeValidator(
+  query: Record<string, string>
+): Promise<true | { issue?: { details?: { text?: string } }[] }> {
+  return new Promise((resolve, reject) => {
+    const req = { query } as Request;
+    const res = {
+      status: () => res,
+      type: () => res,
+      json: (body: { issue?: { details?: { text?: string } }[] }) => resolve(body),
+    };
+    systemUseNoticeValidator(req, res as unknown as Response, () => resolve(true)).catch(reject);
+  });
+}
 
 function makeNotice(body = 'Approved notice'): DocumentReference {
   return {
@@ -44,6 +60,16 @@ function makeNotice(body = 'Approved notice'): DocumentReference {
 }
 
 describe('System use notice', () => {
+  test('Accepts a non-UUID client id and rejects an empty one', async () => {
+    await expect(runNoticeValidator({ clientId: 'medplum-cli' })).resolves.toBe(true);
+    await expect(runNoticeValidator({})).resolves.toBe(true);
+
+    const rejected = await runNoticeValidator({ clientId: ' ' });
+    expect(rejected).toMatchObject({
+      issue: [{ details: { text: 'Invalid clientId' } }],
+    });
+  });
+
   test('Validates and decodes an approved final notice', () => {
     expect(validateSystemUseNotice(makeNotice(), true)).toStrictEqual({
       version: 'usg-system-use-2026-09-10',
