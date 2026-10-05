@@ -152,7 +152,7 @@ systemUseNoticeAdminRouter.post('/projects/:projectId/policy', async (req: Reque
 
 /**
  * Checks the version and writes the notice in one serializable transaction.
- * A concurrent create sees the other write or is retried, so the same version cannot identify two notices.
+ * A concurrent create sees the other write or is retried, so the same version cannot identify two notices in one project.
  */
 async function commitUniqueNoticeVersion<T>(
   repo: Repository,

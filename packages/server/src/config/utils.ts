@@ -36,7 +36,10 @@ export function addDefaults(config: MedplumServerConfig): ServerConfig {
   config.defaultBotRuntimeVersion ??= 'awslambda';
   config.defaultProjectFeatures ??= [];
   config.defaultProjectSystemSetting ??= [];
-  config.systemUseNotice ??= { enabledByDefault: true };
+  config.systemUseNotice = {
+    ...config.systemUseNotice,
+    enabledByDefault: config.systemUseNotice?.enabledByDefault ?? true,
+  };
   config.emailProvider ||= config.smtp ? 'smtp' : 'awsses';
   config.dispatchEnabled ??= true;
   config.subscriptionsEnabled ??= true;

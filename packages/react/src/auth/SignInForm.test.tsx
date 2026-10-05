@@ -11,12 +11,14 @@ import type { SignInFormProps } from './SignInForm';
 import { SignInForm } from './SignInForm';
 
 let lastProfileRequest: { login?: string; profile?: string; systemUseNoticeVersion?: string } | undefined;
+let lastSystemUseNoticeUrl: string | undefined;
 
 function mockFetch(url: string, options: any): Promise<any> {
   let status = 404;
   let result: any;
 
   if (options.method === 'GET' && url.includes('/auth/system-use-notice')) {
+    lastSystemUseNoticeUrl = url;
     status = 200;
     if (url.includes('projectId=notice-enabled')) {
       result = {
@@ -516,6 +518,7 @@ describe('SignInForm', () => {
 
   test('Acknowledges the selected project notice before choosing a profile', async () => {
     lastProfileRequest = undefined;
+    lastSystemUseNoticeUrl = undefined;
     let success = false;
 
     await setup({
@@ -549,6 +552,8 @@ describe('SignInForm', () => {
     });
 
     expect(await screen.findByText('Project B notice text')).toBeInTheDocument();
+    expect(lastSystemUseNoticeUrl).toContain('projectId=project-b');
+    expect(lastSystemUseNoticeUrl).not.toContain('clientId=');
     expect(lastProfileRequest).toBeUndefined();
 
     await act(async () => {

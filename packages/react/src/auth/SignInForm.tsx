@@ -205,7 +205,7 @@ export function SignInForm(props: SignInFormProps): JSX.Element {
       const projectId = membership.project?.reference?.startsWith('Project/')
         ? membership.project.reference.slice('Project/'.length)
         : undefined;
-      const projectNotice = await medplum.getSystemUseNotice({ clientId: props.clientId, projectId });
+      const projectNotice = await medplum.getSystemUseNotice(projectId ? { projectId } : { clientId: props.clientId });
       if (projectNotice.enabled && projectNotice.version !== noticeVersion) {
         setPendingMembership(membership);
         setProfileNotice(projectNotice);
