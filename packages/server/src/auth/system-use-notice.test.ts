@@ -28,7 +28,7 @@ function runNoticeValidator(
       type: () => res,
       json: (body: { issue?: { details?: { text?: string } }[] }) => resolve(body),
     };
-    systemUseNoticeValidator(req, res as unknown as Response, () => resolve(true)).catch(reject);
+    Promise.resolve(systemUseNoticeValidator(req, res as unknown as Response, () => resolve(true))).catch(reject);
   });
 }
 
