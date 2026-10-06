@@ -80,6 +80,34 @@ describe('New project', () => {
     expect(res6).toHaveStatus(400);
   });
 
+  test('Creates a project when the default system use notice is enabled', async () => {
+    const previous = getConfig().systemUseNotice;
+    getConfig().systemUseNotice = { enabledByDefault: true };
+    try {
+      const res1 = await request(app)
+        .post('/auth/newuser')
+        .type('json')
+        .send({
+          firstName: 'Alexander',
+          lastName: 'Hamilton',
+          email: `alex${randomUUID()}@example.com`,
+          password: 'password!@#',
+          recaptchaToken: 'xyz',
+          codeChallenge: 'xyz',
+          codeChallengeMethod: 'plain',
+        });
+      expect(res1).toHaveStatus(200);
+
+      const res2 = await request(app).post('/auth/newproject').type('json').send({
+        login: res1.body.login,
+        projectName: 'Hamilton Project',
+      });
+      expect(res2).toHaveStatus(200);
+    } finally {
+      getConfig().systemUseNotice = previous;
+    }
+  });
+
   test('Sends welcome email to the new project owner', async () => {
     const sendEmailSpy = vi.spyOn(emailModule, 'sendEmail').mockResolvedValue(undefined);
     try {

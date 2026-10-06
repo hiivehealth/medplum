@@ -83,6 +83,7 @@ import type { IClientStorage } from './storage';
 import { ClientStorage } from './storage';
 import type { SubscriptionEmitter } from './subscriptions';
 import { SubscriptionManager } from './subscriptions';
+import type { SystemUseNoticeRequest, SystemUseNoticeResponse } from './system-use-notice';
 import { indexSearchParameter } from './types';
 import { indexStructureDefinitionBundle, isDataTypeLoaded, isProfileLoaded, loadDataType } from './typeschema/types';
 import type { CodeChallengeMethod, ProfileResource, QueryTypes, WithId } from './utils';
@@ -502,6 +503,8 @@ export interface BaseLoginRequest {
 export interface EmailPasswordLoginRequest extends BaseLoginRequest {
   readonly email: string;
   readonly password: string;
+  /** Opaque version acknowledged for this password login request. */
+  readonly systemUseNoticeVersion?: string;
   /** @deprecated Use "offline_access" scope instead. */
   readonly remember?: boolean;
 }
@@ -1551,6 +1554,27 @@ export class MedplumClient extends TypedEventTarget<MedplumClientEventMap> {
       undefined,
       options
     );
+  }
+
+  /**
+   * Returns the effective pre-authentication system use notice.
+   * @param request - Project/client context for policy resolution.
+   * @param options - Optional fetch options.
+   * @returns Effective notice display content or a disabled policy.
+   */
+  async getSystemUseNotice(
+    request: SystemUseNoticeRequest,
+    options?: MedplumRequestOptions
+  ): Promise<SystemUseNoticeResponse> {
+    const search = new URLSearchParams();
+    if (request.clientId) {
+      search.set('clientId', request.clientId);
+    }
+    if (request.projectId) {
+      search.set('projectId', request.projectId);
+    }
+    const query = search.toString();
+    return this.get<SystemUseNoticeResponse>(`auth/system-use-notice${query ? `?${query}` : ''}`, options);
   }
 
   /**

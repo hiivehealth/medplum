@@ -12,6 +12,7 @@ describe('utils', () => {
     expect(isBooleanConfig('logRequests')).toBe(true);
     expect(isBooleanConfig('rateLimitsEnabled')).toBe(true);
     expect(isBooleanConfig('requireVerifiedEmailForProjectCreation')).toBe(true);
+    expect(isBooleanConfig('systemUseNotice.enabledByDefault')).toBe(true);
   });
 
   test('isIntegerConfig', () => {
@@ -31,6 +32,34 @@ describe('utils', () => {
       baseUrl: 'https://example.com',
     } as any);
     expect(config.rateLimitsEnabled).toBe(true);
+  });
+
+  test('addDefaults fails closed for missing Project notice policies', () => {
+    const config = addDefaults({ baseUrl: 'https://example.com' } as any);
+    expect(config.systemUseNotice).toStrictEqual({ enabledByDefault: true });
+    expect(isObjectConfig('systemUseNotice')).toBe(true);
+  });
+
+  test('addDefaults enables a partial system use notice without disabling an explicit false', () => {
+    const partial = addDefaults({
+      baseUrl: 'https://example.com',
+      systemUseNotice: {
+        defaultNoticeProjectId: 'project-1',
+        defaultNoticeReference: 'DocumentReference/notice-1',
+      },
+    } as any);
+    expect(partial.systemUseNotice).toStrictEqual({
+      enabledByDefault: true,
+      defaultNoticeProjectId: 'project-1',
+      defaultNoticeReference: 'DocumentReference/notice-1',
+    });
+
+    const disabled = addDefaults({
+      baseUrl: 'https://example.com',
+      systemUseNotice: { enabledByDefault: false, defaultNoticeProjectId: 'project-1' },
+    } as any);
+    expect(disabled.systemUseNotice.enabledByDefault).toBe(false);
+    expect(disabled.systemUseNotice.defaultNoticeProjectId).toBe('project-1');
   });
 
   test('addDefaults preserves existing maxSearchOffset', () => {

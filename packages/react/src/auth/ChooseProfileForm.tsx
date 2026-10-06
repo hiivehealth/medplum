@@ -18,6 +18,8 @@ export interface ChooseProfileFormProps {
   readonly login: string;
   readonly memberships: ProjectMembership[];
   readonly handleAuthResponse: (response: LoginAuthenticationResponse) => void;
+  /** When set, the parent resolves the selected project's notice before posting to `/auth/profile`. */
+  readonly onSelectMembership?: (membership: ProjectMembership) => Promise<void> | void;
 }
 
 const RECENT_PROJECTS_KEY = 'medplum.recentProjects';
@@ -52,18 +54,29 @@ export function ChooseProfileForm(props: ChooseProfileFormProps): JSX.Element {
     return t2 - t1;
   }
 
+  function rememberProject(membershipId: string): void {
+    setRecentProjects((prev) => {
+      const next = { ...prev, [membershipId]: Date.now() };
+      const entries = Object.entries(next).sort((a, b) => b[1] - a[1]);
+      return Object.fromEntries(entries.slice(0, MAX_RECENT_PROJECTS));
+    });
+  }
+
   function handleValueSelect(membershipId: string): void {
+    const membership = props.memberships.find((item) => item.id === membershipId);
+    if (props.onSelectMembership && membership) {
+      Promise.resolve(props.onSelectMembership(membership))
+        .then(() => rememberProject(membershipId))
+        .catch((err) => setOutcome(normalizeOperationOutcome(err)));
+      return;
+    }
     medplum
       .post<LoginAuthenticationResponse>('auth/profile', {
         login: props.login,
         profile: membershipId,
       })
       .then((response) => {
-        setRecentProjects((prev) => {
-          const next = { ...prev, [membershipId]: Date.now() };
-          const entries = Object.entries(next).sort((a, b) => b[1] - a[1]);
-          return Object.fromEntries(entries.slice(0, MAX_RECENT_PROJECTS));
-        });
+        rememberProject(membershipId);
         props.handleAuthResponse(response);
       })
       .catch((err) => setOutcome(normalizeOperationOutcome(err)));

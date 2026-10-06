@@ -32,6 +32,7 @@ describe('SuperAdminPage', () => {
   beforeEach(() => {
     medplum = new MockClient();
     vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.spyOn(medplum, 'isLoading').mockImplementation(() => false);
     vi.spyOn(medplum, 'isSuperAdmin').mockImplementation(() => true);
     postSpy = vi.spyOn(medplum, 'post');
   });
@@ -339,7 +340,7 @@ describe('SuperAdminPage', () => {
   });
 
   test('Access denied', async () => {
-    vi.spyOn(medplum, 'isSuperAdmin').mockImplementationOnce(() => false);
+    vi.spyOn(medplum, 'isSuperAdmin').mockImplementation(() => false);
     setup();
     expect(screen.getByText('Forbidden')).toBeInTheDocument();
   });
@@ -804,7 +805,7 @@ describe('SuperAdminPage', () => {
     });
 
     test('ExplainSearchForm access denied for non-super admin', async () => {
-      vi.spyOn(medplum, 'isSuperAdmin').mockImplementationOnce(() => false);
+      vi.spyOn(medplum, 'isSuperAdmin').mockImplementation(() => false);
       setup();
 
       // The ExplainSearchForm should show forbidden when user is not super admin

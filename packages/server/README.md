@@ -55,6 +55,26 @@ npm run test
 npm run build
 ```
 
+## System use notice configuration
+
+Projects may select an immutable `HiiveSystemUseNotice` through the operator-only endpoints under
+`/admin/super/system-use-notices`. The secure server fallback is enabled when the setting is omitted:
+
+```json
+{
+  "systemUseNotice": {
+    "enabledByDefault": true,
+    "defaultNoticeProjectId": "<catalog-project-uuid>",
+    "defaultNoticeReference": "DocumentReference/<final-notice-uuid>"
+  }
+}
+```
+
+Startup fails if that enabled fallback cannot be resolved and validated. To bootstrap a new environment, start once
+with `enabledByDefault: false`, create and publish the approved notice, then configure its Project and reference and
+restart. Final notice resources cannot be updated or deleted through FHIR APIs; emergency correction is a controlled
+database migration followed by creation of a replacement version.
+
 ## Docker
 
 Medplum recommends Docker images for production deployment.

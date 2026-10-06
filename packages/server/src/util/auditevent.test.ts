@@ -14,9 +14,11 @@ import {
   createBotAuditEvent,
   CreateInteraction,
   logAuditEvent,
+  LoginEvent,
   ReadInteraction,
   RestfulOperationType,
   SearchInteraction,
+  UserAuthenticationEvent,
 } from './auditevent';
 
 describe('AuditEvent utils', () => {
@@ -99,6 +101,25 @@ describe('AuditEvent utils', () => {
     expect(auditEvent.entity).toStrictEqual([
       { query: 'Patient?name=foo', detail: [{ type: 'numResults', valueString: '42' }] },
     ]);
+  });
+
+  test('Includes only the acknowledged system use notice version', async () => {
+    await loadTestConfig();
+    const auditEvent = createAuditEvent(
+      UserAuthenticationEvent,
+      LoginEvent,
+      randomUUID(),
+      { reference: 'Practitioner/123' },
+      '127.0.0.1',
+      AuditEventOutcome.Success,
+      { systemUseNoticeVersion: 'usg-system-use-2026-09-10' }
+    );
+
+    expect(auditEvent.extension).toContainEqual({
+      url: 'https://ehr.hiivehealth.net/fhir/StructureDefinition/system-use-notice-version',
+      valueString: 'usg-system-use-2026-09-10',
+    });
+    expect(JSON.stringify(auditEvent)).not.toContain('password');
   });
 
   test('Includes entityDetail on a resource entity', async () => {
