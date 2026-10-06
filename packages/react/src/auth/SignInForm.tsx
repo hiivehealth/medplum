@@ -19,6 +19,14 @@ import type { MfaMethod } from './MfaForm';
 import { MfaVerificationForm } from './MfaVerificationForm';
 import { NewProjectForm } from './NewProjectForm';
 
+interface SystemUseNoticeLoad {
+  readonly clientId?: string;
+  readonly projectId?: string;
+  readonly request: number;
+  readonly notice?: SystemUseNoticeResponse;
+  readonly error: boolean;
+}
+
 export interface SignInFormProps extends BaseLoginRequest {
   readonly login?: string;
   readonly chooseScopes?: boolean;
@@ -66,30 +74,42 @@ export function SignInForm(props: SignInFormProps): JSX.Element {
   const [mfaEmail, setMfaEmail] = useState<string>();
   const [mfaEmailMode, setMfaEmailMode] = useState(false);
   const [memberships, setMemberships] = useState<ProjectMembership[]>();
-  const [notice, setNotice] = useState<SystemUseNoticeResponse | undefined>(loginCode ? { enabled: false } : undefined);
   const [noticeVersion, setNoticeVersion] = useState<string>();
-  const [noticeError, setNoticeError] = useState(false);
   const [noticeRequest, setNoticeRequest] = useState(0);
+  const [noticeResult, setNoticeResult] = useState<SystemUseNoticeLoad>();
   const [pendingMembership, setPendingMembership] = useState<ProjectMembership>();
   const [profileNotice, setProfileNotice] = useState<SystemUseNoticeResponse>();
+  const noticeMatchesRequest =
+    noticeResult !== undefined &&
+    noticeResult.clientId === props.clientId &&
+    noticeResult.projectId === props.projectId &&
+    noticeResult.request === noticeRequest;
+  let notice: SystemUseNoticeResponse | undefined;
+  if (loginCode) {
+    notice = { enabled: false };
+  } else if (noticeMatchesRequest) {
+    notice = noticeResult?.notice;
+  }
+  const noticeError = Boolean(!loginCode && noticeMatchesRequest && noticeResult?.error);
 
   useEffect(() => {
     if (loginCode || login) {
-      return;
+      return undefined;
     }
     let active = true;
-    setNotice(undefined);
-    setNoticeError(false);
+    const clientId = props.clientId;
+    const projectId = props.projectId;
+    const request = noticeRequest;
     medplum
-      .getSystemUseNotice({ clientId: props.clientId, projectId: props.projectId })
+      .getSystemUseNotice({ clientId, projectId })
       .then((result) => {
         if (active) {
-          setNotice(result);
+          setNoticeResult({ clientId, projectId, request, notice: result, error: false });
         }
       })
       .catch(() => {
         if (active) {
-          setNoticeError(true);
+          setNoticeResult({ clientId, projectId, request, error: true });
         }
       });
     return () => {
